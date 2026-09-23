@@ -21,8 +21,8 @@ from ..memory.longterm import LongTermMemory
 from ..memory.session_store import SessionStore
 from ..models.openai_provider import OpenAIProvider
 from ..runtime.engine import RuntimeEngine
-from ..tools.builtin import build_builtin_tools
 from ..tools.levels import PermissionLevel
+from ..tools.loader import ToolLoader
 from ..tools.permission import PermissionGate
 from ..tools.registry import ToolRegistry
 from ..core.config import get_config
@@ -38,7 +38,11 @@ _longterm = None
 
 # 仓库根目录（backend/mini_harness/api/routes.py -> parents[3]）
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_DEFAULT_PROMPT_PATH = _REPO_ROOT / "projects" / "default" / "prompts" / "system.md"
+_DEFAULT_PROJECT_DIR = _REPO_ROOT / "projects" / "default"
+_DEFAULT_PROMPT_PATH = _DEFAULT_PROJECT_DIR / "prompts" / "system.md"
+
+# 默认内置工具白名单（顺序即工具列表展示顺序）
+_DEFAULT_BUILTIN_TOOLS = ["echo", "get_time", "simulate_delete_file", "memory_save", "memory_search"]
 
 
 def _prompt_cfg() -> SimpleNamespace:
@@ -51,6 +55,19 @@ def _prompt_cfg() -> SimpleNamespace:
         system_prompt_path=str(_DEFAULT_PROMPT_PATH),
         agent_name="MiniHarness",
         language="中文",
+    )
+
+
+def _tool_cfg() -> SimpleNamespace:
+    """工具装载来源（临时占位）。
+
+    TODO(P0-1): Step 3 换成 `core.config.ProjectConfig`。
+    """
+    return SimpleNamespace(
+        tools={
+            "builtin": list(_DEFAULT_BUILTIN_TOOLS),
+            "plugins_dir": str(_DEFAULT_PROJECT_DIR / "tools"),
+        }
     )
 
 
@@ -75,8 +92,7 @@ def build_engine(session_id: str) -> RuntimeEngine:
     db = _get_db()
     store = SessionStore(db, session_id)
     registry = ToolRegistry(allowed_paths=["E:/code/ai/harness-scratch", "C:/Users/11383/.openclaw-autoclaw/workspace"])
-    for tool in build_builtin_tools(get_longterm(), session_id=session_id):
-        registry.register(tool)
+    ToolLoader(registry, get_longterm(), session_id=session_id).load_all(_tool_cfg())
     gate = PermissionGate(registry, approval_store=db)
     budget = Budget(
         context_token_budget=cfg.context_token_budget,
@@ -231,8 +247,7 @@ async def list_tools(session_id: Optional[str] = None):
 def _fallback_registry() -> ToolRegistry:
     """无 session 时用临时注册表仅做展示（权限元数据来自工具定义）。"""
     reg = ToolRegistry()
-    for t in build_builtin_tools(get_longterm()):
-        reg.register(t)
+    ToolLoader(reg, get_longterm()).load_all(_tool_cfg())
     return reg
 
 

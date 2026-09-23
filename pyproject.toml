@@ -27,7 +27,8 @@ package-dir = {"" = "backend"}
 packages = [
     "mini_harness", "mini_harness.core", "mini_harness.persistence",
     "mini_harness.memory", "mini_harness.context", "mini_harness.models",
-    "mini_harness.tools", "mini_harness.runtime", "mini_harness.api",
+    "mini_harness.tools", "mini_harness.tools.builtin", "mini_harness.sdk",
+    "mini_harness.runtime", "mini_harness.api",
 ]
 
 [tool.pytest.ini_options]
