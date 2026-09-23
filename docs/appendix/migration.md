@@ -17,7 +17,7 @@
 | `RuntimeEngine.__init__` 参数顺序 | `… assembler, longterm, system_prompt, max_turns, tool_timeout` | `… assembler, system_prompt, longterm, max_turns, tool_timeout` | 用关键字参数调用即不受影响 |
 | 内置工具装配 | `tools.builtin.build_builtin_tools(longterm, session_id)` | 已移除，改用 `ToolLoader(...).load_all(cfg)` | 见 [docs/07-custom-tools.md](../07-custom-tools.md) |
 | 内置工具模块路径 | `mini_harness/tools/builtin.py`（单文件） | `mini_harness/tools/builtin/{system,memory}.py`（包） | 若按文件路径引用过，改为包导入 |
-| 引擎容器 | `_engines` 普通字典，实例进程内常驻 | 容量 16 的 LRU，未命中即按 `session_id` 从数据库重建 | 依赖"引擎实例长期存活"的自定义逻辑要改为无状态；审批"记住同类"（`approve_always`）会随淘汰失效 |
+| 引擎实例容器 | 进程内常驻，实例永久存活 | 容量 16 的 LRU，未命中即按 `session_id` 从数据库重建 | 依赖"引擎实例长期存活"的自定义逻辑要改为无状态；审批"记住同类"（`approve_always`）会随淘汰失效 |
 
 ### 新增（不影响既有代码）
 
