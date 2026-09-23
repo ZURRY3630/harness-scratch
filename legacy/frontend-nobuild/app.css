@@ -1,0 +1,87 @@
+/* MiniHarness · Vue3 前端样式 */
+:root{
+  --bg:#f7f7f5; --panel:#ffffff; --ink:#1a1c20; --ink-2:#565c66; --ink-3:#9aa0aa;
+  --line:#e4e6ea; --accent:#0b6e8a; --accent-bg:#eef6f9;
+  --ok:#2f7d4f; --warn:#9a6b2f; --bad:#a33a3a;
+  --mono:"Cascadia Code",Consolas,monospace;
+}
+[v-cloak]{display:none}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;font-size:14.5px;height:100vh;display:flex;overflow:hidden}
+/* Vue 挂载容器本身是 flex 容器：aside + .main 左右分栏 */
+#app{display:flex;flex:1;width:100%;height:100vh;min-width:0}
+
+/* ---------- sidebar ---------- */
+.sidebar{width:262px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;flex-shrink:0}
+.brand{padding:16px 16px 12px;border-bottom:1px solid var(--line)}
+.brand h1{font-size:16px;font-weight:600}
+.brand p{font-size:11px;color:var(--ink-3);margin-top:2px;font-family:var(--mono)}
+.btn-new{margin:12px 12px 8px;padding:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-size:13px;border-radius:3px}
+.btn-new:disabled{opacity:.5;cursor:not-allowed}
+.tabs{display:flex;margin:0 12px 6px;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.tabs button{flex:1;padding:6px;border:none;background:none;cursor:pointer;font-size:12.5px;color:var(--ink-2)}
+.tabs button.on{background:var(--accent-bg);color:var(--accent);font-weight:600}
+.list{flex:1;overflow-y:auto;padding:4px 6px}
+.sess{padding:8px 10px;border-radius:3px;cursor:pointer;font-size:13px;color:var(--ink-2);display:flex;justify-content:space-between;gap:6px;align-items:center}
+.sess:hover{background:var(--bg)}
+.sess.active{background:var(--accent-bg);color:var(--accent);font-weight:600}
+.sess-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.del{border:none;background:none;color:var(--ink-3);cursor:pointer;font-size:12px;visibility:hidden;flex-shrink:0}
+.sess:hover .del,.mem:hover .del{visibility:visible}
+.del:hover{color:var(--bad)}
+.empty{padding:14px 10px;font-size:12px;color:var(--ink-3);text-align:center}
+.mem{display:flex;gap:6px;align-items:center;padding:7px 8px;border-bottom:1px solid var(--line);font-size:12.5px}
+.mem-kind{font-family:var(--mono);font-size:10px;color:var(--accent);border:1px solid var(--accent-bg);background:var(--accent-bg);padding:0 4px;border-radius:2px;flex-shrink:0}
+.mem-content{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2)}
+.mem-add{display:flex;gap:6px;padding:6px 4px}
+.mem-add input{flex:1;min-width:0;border:1px solid var(--line);border-radius:3px;padding:6px 8px;font-size:12.5px;outline:none}
+.mem-add input:focus{border-color:var(--accent)}
+.mem-add button{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:3px;padding:0 10px;cursor:pointer;font-size:12.5px}
+.mem-add button:disabled{opacity:.4}
+.stats{border-top:1px solid var(--line);padding:10px 14px;font-size:11px;line-height:2}
+.stats div{display:flex;justify-content:space-between}
+.stats span{color:var(--ink-3)}
+.stats b{font-family:var(--mono);font-weight:600;color:var(--ink)}
+
+/* ---------- main ---------- */
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.header{padding:12px 22px;border-bottom:1px solid var(--line);background:var(--panel);display:flex;justify-content:space-between;align-items:center}
+.title{font-weight:600;font-size:14px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:7px}
+.dot.busy{background:var(--warn);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.status{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.feed{flex:1;overflow-y:auto;padding:22px 26px;display:flex;flex-direction:column;gap:13px}
+.empty-main{margin:auto;color:var(--ink-3);font-size:13px}
+.msg{max-width:78%;padding:10px 14px;border-radius:6px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.msg.user{align-self:flex-end;background:var(--accent);color:#fff}
+.msg.assistant{align-self:flex-start;background:var(--panel);border:1px solid var(--line)}
+.msg.summary{align-self:center;background:var(--accent-bg);border:1px dashed var(--accent);color:var(--accent);font-size:12.5px;max-width:90%}
+.caret{display:inline-block;width:7px;height:14px;background:var(--accent);vertical-align:text-bottom;margin-left:2px;animation:pulse .8s infinite}
+.tool-card{align-self:flex-start;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);padding:9px 14px;border-radius:4px;max-width:82%;font-family:var(--mono);font-size:12.5px}
+.tool-card.err{border-left-color:var(--bad)}
+.tool-card .tt{font-weight:600;margin-bottom:3px}
+.tool-card .tr{color:var(--ink-2);word-break:break-all}
+.status-line{align-self:center;font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+
+/* approval */
+.approval{align-self:center;border:1px solid var(--warn);background:#fdf8ef;padding:14px 18px;border-radius:4px;max-width:88%}
+.approval h3{font-size:13.5px;color:var(--warn);margin-bottom:8px}
+.approval .kv{margin-top:4px;font-size:13px}
+.approval code{font-family:var(--mono);font-size:12px;background:#f6efe2;padding:1px 5px;border-radius:2px;word-break:break-all}
+.approval label{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ink-2);margin-top:9px;cursor:pointer}
+.approval .hint{font-size:11px;color:var(--ink-3);margin-top:5px}
+.approval .row{display:flex;gap:10px;margin-top:11px}
+.approval button{flex:1;padding:7px;border-radius:3px;cursor:pointer;font-size:13px;border:1px solid var(--line)}
+.btn-approve{background:var(--ok);color:#fff;border-color:var(--ok)!important}
+.btn-approve:disabled,.btn-deny:disabled{opacity:.5;cursor:not-allowed}
+.btn-deny{background:#fff;color:var(--bad);border-color:var(--bad)!important}
+
+/* input */
+.input-bar{display:flex;gap:10px;padding:14px 22px;border-top:1px solid var(--line);background:var(--panel)}
+.input-bar textarea{flex:1;resize:none;border:1px solid var(--line);border-radius:4px;padding:10px 12px;font:inherit;max-height:120px;outline:none}
+.input-bar textarea:focus{border-color:var(--accent)}
+.input-bar button{padding:0 26px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px}
+.input-bar button:disabled{opacity:.45;cursor:not-allowed}
+
+@media (max-width:760px){ .sidebar{display:none} .msg{max-width:92%} }

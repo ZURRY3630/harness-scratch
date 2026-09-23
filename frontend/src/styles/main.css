@@ -1,0 +1,18 @@
+/* MiniHarness 全局样式（组件内样式在各 SFC 的 <style scoped>） */
+:root{
+  --bg:#f7f7f5; --panel:#ffffff; --ink:#1a1c20; --ink-2:#565c66; --ink-3:#9aa0aa;
+  --line:#e4e6ea; --accent:#0b6e8a; --accent-bg:#eef6f9;
+  --ok:#2f7d4f; --warn:#9a6b2f; --bad:#a33a3a;
+  --mono:"Cascadia Code",Consolas,monospace;
+}
+[v-cloak]{display:none}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body,#app{height:100%}
+#app{display:flex;width:100%} /* 挂载点不在组件模板内，不能用 scoped 样式命中 */
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:14.5px;overflow:hidden;
+}
+button{font-family:inherit}
+input,textarea{font-family:inherit}

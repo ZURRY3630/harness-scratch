@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mini-harness"
+version = "0.2.0"
+description = "A production-oriented agent harness: context compression, long-term memory, prompt caching, token budgeting."
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=1.0.0",
+    "python-dotenv>=1.0.0",
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "httpx>=0.27",
+]
+
+[tool.setuptools]
+package-dir = {"" = "backend"}
+packages = [
+    "mini_harness", "mini_harness.core", "mini_harness.persistence",
+    "mini_harness.memory", "mini_harness.context", "mini_harness.models",
+    "mini_harness.tools", "mini_harness.runtime", "mini_harness.api",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

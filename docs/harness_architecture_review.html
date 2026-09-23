@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiniHarness 架构文档 · 现状解析 × 生产级目标</title>
+<style>
+  :root{
+    --bg:#fafbfc; --ink:#16181d; --ink-2:#4a5058; --ink-3:#8a919b;
+    --hair:#d9dde3; --hair-soft:#e7eaee;
+    --accent:#155e75; --accent-ink:#0c4a5e; --accent-bg:#f0f6f8;
+    --warn-bg:#faf5ef; --warn-ink:#8a5a2a;
+    --mono:"Cascadia Code","JetBrains Mono",Consolas,"Courier New",monospace;
+    --sans:"Segoe UI","SF Pro Text","PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+  .canvas{max-width:1280px;margin:0 auto;padding:0 48px}
+  a{color:var(--accent-ink);text-decoration:none;border-bottom:1px solid var(--hair)}
+  a:hover{border-bottom-color:var(--accent-ink)}
+  code{font-family:var(--mono);font-size:.86em;background:var(--accent-bg);padding:.08em .35em;border:1px solid var(--hair-soft)}
+  /* ---------- cover ---------- */
+  .cover{padding:72px 0 40px;border-bottom:1px solid var(--ink)}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:22px}
+  h1{font-size:52px;line-height:1.08;font-weight:600;letter-spacing:-.02em;max-width:20em}
+  .subtitle{margin-top:18px;font-size:19px;color:var(--ink-2);max-width:38em}
+  .meta-row{display:flex;flex-wrap:wrap;gap:0 42px;margin-top:34px}
+  .meta-row div{font-size:12.5px;color:var(--ink-3)}
+  .meta-row b{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);margin-bottom:3px;font-weight:500}
+  /* ---------- layout ---------- */
+  .layout{display:grid;grid-template-columns:218px minmax(0,1fr);gap:56px;padding-top:8px}
+  nav.toc{position:sticky;top:0;align-self:start;padding:42px 0 40px;max-height:100vh;overflow:auto}
+  nav.toc .toc-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px}
+  nav.toc a{display:flex;gap:10px;align-items:baseline;padding:5px 0;border:none;color:var(--ink-2);font-size:13px}
+  nav.toc a:hover{color:var(--accent-ink)}
+  nav.toc .no{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+  main{padding:42px 0 40px;min-width:0}
+  section{margin-bottom:76px}
+  section p{max-width:72ch;color:var(--ink);margin-bottom:14px}
+  section p.muted{color:var(--ink-2)}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:26px;padding-bottom:12px;border-bottom:1px solid var(--ink)}
+  .sec-head .no{font-family:var(--mono);font-size:13px;color:var(--accent);letter-spacing:.06em}
+  h2{font-size:27px;font-weight:600;letter-spacing:-.015em;line-height:1.2}
+  h3{font-size:17px;font-weight:600;margin:30px 0 12px;letter-spacing:0}
+  h3 .tick{font-family:var(--mono);font-size:12px;color:var(--accent);margin-right:8px;font-weight:500}
+  h4{font-size:14.5px;font-weight:600;margin:20px 0 8px;color:var(--ink)}
+  ul.plain{margin:0 0 14px 0;padding-left:1.2em;max-width:70ch}
+  ul.plain li{margin-bottom:6px}
+  /* ---------- tables ---------- */
+  table{width:100%;border-collapse:collapse;margin:16px 0 22px;font-size:13.5px}
+  caption{caption-side:top;text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);padding-bottom:8px}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:500;color:var(--ink-2);text-align:left;padding:8px 12px 8px 0;border-bottom:1px solid var(--ink)}
+  td{padding:9px 12px 9px 0;border-bottom:1px solid var(--hair-soft);vertical-align:top;color:var(--ink)}
+  tr td:first-child{white-space:nowrap}
+  td .mono, th .mono{font-family:var(--mono);font-size:.9em}
+  .tag{font-family:var(--mono);font-size:11px;padding:1px 7px;border:1px solid var(--hair);white-space:nowrap}
+  .tag.ok{color:var(--accent-ink);border-color:var(--accent-ink)}
+  .tag.warn{color:var(--warn-ink);border-color:var(--warn-ink);background:var(--warn-bg)}
+  .tag.bad{color:#9c2f2f;border-color:#9c2f2f}
+  /* ---------- figures ---------- */
+  figure{margin:24px 0 26px}
+  figcaption{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--ink-3);margin-top:10px;text-transform:uppercase}
+  figure svg{display:block;width:100%;height:auto;border:1px solid var(--hair-soft);background:#fdfdfe}
+  .svg-label{font-family:var(--mono);font-size:11.5px;fill:var(--ink-2)}
+  .svg-label-b{font-family:var(--mono);font-size:11.5px;fill:var(--ink);font-weight:600}
+  .svg-small{font-family:var(--mono);font-size:10px;fill:var(--ink-3)}
+  /* ---------- callouts ---------- */
+  .note{border:1px solid var(--hair);border-left:2px solid var(--accent);padding:14px 18px;margin:18px 0 22px;max-width:76ch}
+  .note .note-t{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+  .note p{margin-bottom:0;font-size:14px}
+  /* ---------- loop steps ---------- */
+  ol.steps{list-style:none;counter-reset:st;margin:18px 0;max-width:74ch}
+  ol.steps li{counter-increment:st;display:flex;gap:16px;padding:11px 0;border-bottom:1px solid var(--hair-soft)}
+  ol.steps li::before{content:counter(st,decimal-leading-zero);font-family:var(--mono);font-size:12px;color:var(--accent);padding-top:2px}
+  ol.steps b{font-weight:600}
+  ol.steps span{color:var(--ink-2)}
+  /* ---------- roadmap ---------- */
+  .roadmap{border-left:1px solid var(--ink);margin:22px 0 10px;padding-left:0}
+  .rm-item{position:relative;padding:2px 0 24px 26px}
+  .rm-item::before{content:"";position:absolute;left:-4px;top:8px;width:7px;height:7px;background:var(--bg);border:1.5px solid var(--accent);border-radius:0}
+  .rm-head{display:flex;gap:14px;align-items:baseline}
+  .rm-head .m{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.08em}
+  .rm-head b{font-size:15.5px;font-weight:600}
+  .rm-item p{color:var(--ink-2);font-size:13.5px;margin-top:5px;max-width:66ch}
+  /* ---------- checklist ---------- */
+  ul.check{list-style:none;margin:12px 0 20px;max-width:76ch}
+  ul.check li{padding:7px 0 7px 26px;border-bottom:1px solid var(--hair-soft);position:relative;font-size:13.5px;color:var(--ink)}
+  ul.check li::before{content:"";position:absolute;left:2px;top:12px;width:9px;height:9px;border:1.5px solid var(--ink-3)}
+  /* footer */
+  footer{border-top:1px solid var(--ink);padding:22px 0 60px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  footer span{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--ink-3);text-transform:uppercase}
+  @media (max-width:960px){
+    .layout{grid-template-columns:1fr}
+    nav.toc{position:static;max-height:none;padding-top:24px;border-bottom:1px solid var(--hair-soft)}
+    h1{font-size:38px}
+  }
+</style>
+</head>
+<body>
+<div class="canvas">
+
+  <!-- ================= COVER ================= -->
+  <header class="cover">
+    <div class="kicker">Harness Engineering · Architecture Review</div>
+    <h1>MiniHarness 架构文档</h1>
+    <p class="subtitle">现状解析 × 生产级目标架构 —— 基于《智能体 Harness 工程指南》参考体系，对 <code>scratch</code> 目录教学实现的完整工程评估与演进蓝图。</p>
+    <div class="meta-row">
+      <div><b>对象</b>E:\code\ai\harness_engineering_guide\scratch</div>
+      <div><b>参考体系</b>yeasy.gitbook.io/harness_engineering_guide</div>
+      <div><b>代码基线</b>595 行 Python · 3.11 + uv</div>
+      <div><b>日期</b>2026-09-22</div>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- ================= TOC ================= -->
+    <nav class="toc">
+      <div class="toc-label">目录</div>
+      <a href="#s1"><span class="no">01</span>定位与全景</a>
+      <a href="#s2"><span class="no">02</span>现状架构</a>
+      <a href="#s3"><span class="no">03</span>模块清单</a>
+      <a href="#s4"><span class="no">04</span>关键机制</a>
+      <a href="#s5"><span class="no">05</span>问题清单</a>
+      <a href="#s6"><span class="no">06</span>生产级目标架构</a>
+      <a href="#s7"><span class="no">07</span>验收清单</a>
+      <a href="#s8"><span class="no">08</span>路线图与决策</a>
+    </nav>
+
+    <main>
+
+    <!-- ================= 01 ================= -->
+    <section id="s1">
+      <div class="sec-head"><span class="no">01</span><h2>定位与全景</h2></div>
+      <p>MiniHarness 是《智能体 Harness 工程指南》的配套实战项目：一个<strong>最小但闭环完整</strong>的 Agent Harness。它覆盖了 Harness 最核心的一条链路——模型调用 → 工具登记 → 权限审批 → 工具执行 → 结果回填 → 继续推理——并以 Streamlit 提供带人工审批面板的 Web UI。</p>
+      <p>本次评估的核心判断：<strong>审批挂起/恢复的骨架搭对了，这是 Harness 里最难做对的机制之一；但执行链路没有任何安全收口（校验、沙箱、超时、审计全部缺失），距离生产级差四个量级的能力</strong>——安全收口、持久化恢复、可观测性、编排与生态。</p>
+      <table>
+        <caption>技术栈与入口</caption>
+        <tr><th>项</th><th>内容</th></tr>
+        <tr><td>运行时</td><td>Python 3.11 · uv 管理 · pyproject 包名 <span class="mono">scratch</span> v0.1.0</td></tr>
+        <tr><td>依赖</td><td><span class="mono">openai</span>（AsyncOpenAI，可指向 DeepSeek 等兼容端点）· <span class="mono">streamlit</span> · <span class="mono">python-dotenv</span></td></tr>
+        <tr><td>入口</td><td><span class="mono">simple_agent.py</span>（最小 CLI）· <span class="mono">app.py</span>（Streamlit UI + 审批面板）</td></tr>
+        <tr><td>内置工具</td><td><span class="mono">echo</span>（免审批）· <span class="mono">get_time</span> · <span class="mono">delete_file</span>（模拟删除，需审批）</td></tr>
+        <tr><td>测试</td><td>pytest / pytest-asyncio 已配置（<span class="mono">asyncio_mode=auto</span>），但 <strong>tests/ 目录不存在，零测试</strong></td></tr>
+      </table>
+    </section>
+
+    <!-- ================= 02 ================= -->
+    <section id="s2">
+      <div class="sec-head"><span class="no">02</span><h2>现状架构</h2></div>
+      <p>五层结构：接入层（两个入口）→ 运行时引擎 → 能力层（工具 + 权限）→ 模型层 / 记忆层 → 核心数据结构。依赖方向清晰单向向下，无循环引用。</p>
+      <figure>
+        <svg viewBox="0 0 960 470" role="img" aria-label="现状分层架构图">
+          <rect x="0.5" y="0.5" width="959" height="469" fill="#fdfdfe" stroke="none"/>
+          <!-- 接入层 -->
+          <text class="svg-small" x="30" y="34">接入层</text>
+          <rect x="30" y="46" width="420" height="54" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="46" y="68">app.py — Streamlit UI</text>
+          <text class="svg-small" x="46" y="86">事件解析 · 审批面板 · asyncio 桥接</text>
+          <rect x="510" y="46" width="420" height="54" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="526" y="68">simple_agent.py — CLI</text>
+          <text class="svg-small" x="526" y="86">最小演示 · 硬编码 max_turns=5</text>
+          <line x1="240" y1="100" x2="240" y2="140" stroke="#16181d" stroke-width="1"/>
+          <line x1="720" y1="100" x2="720" y2="140" stroke="#16181d" stroke-width="1"/>
+          <line x1="240" y1="140" x2="720" y2="140" stroke="#16181d" stroke-width="1"/>
+          <line x1="480" y1="140" x2="480" y2="152" stroke="#16181d" stroke-width="1"/>
+          <polygon points="480,152 476,144 484,144" fill="#16181d"/>
+          <!-- 运行时 -->
+          <text class="svg-small" x="30" y="176">运行时层</text>
+          <rect x="30" y="188" width="900" height="56" fill="#f0f6f8" stroke="#155e75"/>
+          <text class="svg-label-b" x="46" y="211" fill="#0c4a5e">runtime/engine.py — RuntimeEngine（Agent Loop）</text>
+          <text class="svg-small" x="46" y="230" fill="#4a5058">pending 对账 → 权限裁决 → 工具执行 → 模型调用 · max_turns 保护 · yield 文本事件</text>
+          <!-- 三条腿 -->
+          <line x1="200" y1="244" x2="200" y2="272" stroke="#16181d"/>
+          <line x1="480" y1="244" x2="480" y2="272" stroke="#16181d"/>
+          <line x1="760" y1="244" x2="760" y2="272" stroke="#16181d"/>
+          <!-- 能力层 -->
+          <text class="svg-small" x="30" y="290">能力层</text>
+          <rect x="30" y="302" width="340" height="66" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="46" y="324">tools/registry.py · tools/permission.py</text>
+          <text class="svg-small" x="46" y="342">Schema 自动生成 · 5 级权限枚举</text>
+          <text class="svg-small" x="46" y="357">校验与白名单已定义 · 未接线</text>
+          <!-- 模型层 -->
+          <rect x="390" y="302" width="270" height="66" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="406" y="324">models/openai_provider.py</text>
+          <text class="svg-small" x="406" y="342">AsyncOpenAI · tool_calls 解析</text>
+          <text class="svg-small" x="406" y="357">call_id 兜底 · JSON 容错</text>
+          <!-- 记忆层 -->
+          <rect x="680" y="302" width="250" height="66" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="696" y="324">memory/storage.py</text>
+          <text class="svg-small" x="696" y="342">SimpleMemory 消息账本</text>
+          <text class="svg-small" x="696" y="357">纯内存 · 无持久化</text>
+          <line x1="200" y1="368" x2="200" y2="396" stroke="#16181d"/>
+          <line x1="525" y1="368" x2="525" y2="396" stroke="#16181d"/>
+          <line x1="805" y1="368" x2="805" y2="396" stroke="#16181d"/>
+          <line x1="200" y1="396" x2="805" y2="396" stroke="#16181d"/>
+          <line x1="480" y1="396" x2="480" y2="408" stroke="#16181d"/>
+          <polygon points="480,408 476,400 484,400" fill="#16181d"/>
+          <!-- 核心定义 -->
+          <text class="svg-small" x="30" y="424">核心定义</text>
+          <rect x="30" y="414" width="560" height="40" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="46" y="440">core/message.py — Message / MessageRole / ToolCall</text>
+          <!-- 死代码 -->
+          <rect x="620" y="414" width="310" height="40" fill="none" stroke="#8a919b" stroke-dasharray="4 3"/>
+          <text class="svg-label-b" x="636" y="440" fill="#8a919b">core/agent.py — 死代码（零引用）</text>
+        </svg>
+        <figcaption>图 1 · 现状分层架构 —— 虚线框为未接线代码</figcaption>
+      </figure>
+
+      <h3><span class="tick">◈</span>Agent Loop 执行循环</h3>
+      <figure>
+        <svg viewBox="0 0 960 300" role="img" aria-label="Agent Loop 流程图">
+          <rect x="0.5" y="0.5" width="959" height="299" fill="#fdfdfe" stroke="none"/>
+          <defs>
+            <marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7" fill="none" stroke="#16181d"/></marker>
+            <marker id="arrA" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7" fill="none" stroke="#155e75"/></marker>
+          </defs>
+          <!-- 主循环节点 -->
+          <rect x="30" y="60" width="150" height="52" fill="#f0f6f8" stroke="#155e75"/>
+          <text class="svg-label-b" x="105" y="82" text-anchor="middle" fill="#0c4a5e">调用模型</text>
+          <text class="svg-small" x="105" y="99" text-anchor="middle">chat(messages, tools)</text>
+
+          <rect x="240" y="60" width="150" height="52" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="315" y="82" text-anchor="middle">登记 tool_calls</text>
+          <text class="svg-small" x="315" y="99" text-anchor="middle">只登记，不执行</text>
+
+          <rect x="450" y="60" width="150" height="52" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="525" y="82" text-anchor="middle">pending 对账</text>
+          <text class="svg-small" x="525" y="99" text-anchor="middle">已声明 − 已回填</text>
+
+          <rect x="660" y="60" width="150" height="52" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="735" y="82" text-anchor="middle">权限裁决</text>
+          <text class="svg-small" x="735" y="99" text-anchor="middle">ALLOW / ASK / DENY</text>
+
+          <rect x="450" y="188" width="150" height="52" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="525" y="210" text-anchor="middle">执行 + 回填</text>
+          <text class="svg-small" x="525" y="227" text-anchor="middle">add_tool_result</text>
+
+          <rect x="660" y="188" width="150" height="52" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="735" y="210" text-anchor="middle">回到循环</text>
+          <text class="svg-small" x="735" y="227" text-anchor="middle">下一轮</text>
+
+          <rect x="30" y="188" width="150" height="52" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="105" y="210" text-anchor="middle">最终回答</text>
+          <text class="svg-small" x="105" y="227" text-anchor="middle">yield · return</text>
+
+          <!-- 挂起分支 -->
+          <rect x="840" y="30" width="100" height="46" fill="none" stroke="#9c2f2f" stroke-dasharray="4 3"/>
+          <text class="svg-label-b" x="890" y="49" text-anchor="middle" fill="#9c2f2f">挂起</text>
+          <text class="svg-small" x="890" y="65" text-anchor="middle">yield 审批事件</text>
+
+          <!-- 箭头 -->
+          <line x1="180" y1="86" x2="238" y2="86" stroke="#16181d" marker-end="url(#arr)"/>
+          <line x1="390" y1="86" x2="448" y2="86" stroke="#16181d" marker-end="url(#arr)"/>
+          <line x1="600" y1="86" x2="658" y2="86" stroke="#16181d" marker-end="url(#arr)"/>
+          <line x1="810" y1="86" x2="838" y2="60" stroke="#9c2f2f" stroke-dasharray="4 3" marker-end="url(#arrA)"/>
+          <text class="svg-small" x="822" y="106" fill="#9c2f2f">ASK</text>
+          <line x1="735" y1="112" x2="735" y2="150" stroke="#16181d"/>
+          <line x1="735" y1="150" x2="602" y2="186" stroke="#16181d" marker-end="url(#arr)"/>
+          <text class="svg-small" x="672" y="150">ALLOW</text>
+          <line x1="525" y1="240" x2="330" y2="150" stroke="#16181d" stroke-dasharray="4 3"/>
+          <line x1="330" y1="150" x2="330" y2="114" stroke="#16181d" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+          <text class="svg-small" x="345" y="146">无 tool_calls 时直达</text>
+          <line x1="600" y1="214" x2="658" y2="214" stroke="#16181d" marker-end="url(#arr)"/>
+          <line x1="660" y1="240" x2="105" y2="272" stroke="none"/>
+          <path d="M 735 240 L 735 268 L 330 268" fill="none" stroke="#16181d"/>
+          <path d="M 330 268 L 105 268 L 105 242" fill="none" stroke="#16181d" marker-end="url(#arr)"/>
+          <text class="svg-small" x="450" y="284">无更多 tool_calls → 输出最终回答并终止（或 max_turns 耗尽）</text>
+        </svg>
+        <figcaption>图 2 · Agent Loop —— 登记 / 执行分离是全库最有工程价值的设计</figcaption>
+      </figure>
+
+      <div class="note">
+        <div class="note-t">关键设计 · 审批挂起与恢复</div>
+        <p>模型返回的 tool_calls 只写入 memory（登记），回到循环开头由 <code>get_pending_tool_calls()</code> 统一对账裁决。<code>ASK</code> 时引擎 <code>yield "[APPROVAL_REQUIRED] {json}"</code> 并 <code>return</code>——工具调用留在 memory 里等下一轮对账；用户批准后 UI 调 <code>approve(call_id)</code>，引擎不带 user_input 续跑即可无缝恢复。拒绝则写入 <code>[DENIED]</code> tool 结果。挂起/恢复不丢状态，因为状态全在消息账本里。</p>
+      </div>
+    </section>
+
+    <!-- ================= 03 ================= -->
+    <section id="s3">
+      <div class="sec-head"><span class="no">03</span><h2>模块清单</h2></div>
+      <table>
+        <caption>10 个源文件 · 595 行（不含 .venv / pycache / egg-info）</caption>
+        <tr><th>模块</th><th>行数</th><th>职责</th><th>状态</th></tr>
+        <tr><td class="mono">runtime/engine.py</td><td>~85</td><td>Agent Loop：对账 → 裁决 → 执行 → 模型 → 终止判断；max_turns 保护</td><td><span class="tag ok">核心可用</span></td></tr>
+        <tr><td class="mono">memory/storage.py</td><td>~80</td><td>内存消息账本；OpenAI 消息序列化；pending 对账</td><td><span class="tag ok">可用</span></td></tr>
+        <tr><td class="mono">tools/registry.py</td><td>~110</td><td>工具注册；签名 → JSON Schema；白名单 / 路径限制；执行原语</td><td><span class="tag warn">校验未接线</span></td></tr>
+        <tr><td class="mono">tools/permission.py</td><td>~65</td><td>5 级权限 → 3 值决策；call_id 粒度一次性批准</td><td><span class="tag warn">语义未落实</span></td></tr>
+        <tr><td class="mono">models/openai_provider.py</td><td>~60</td><td>OpenAI 兼容异步调用；tool_calls 解析 + 兜底</td><td><span class="tag warn">调试泄漏</span></td></tr>
+        <tr><td class="mono">models/base.py</td><td>~20</td><td>BaseModelProvider ABC + ModelResponse</td><td><span class="tag ok">可用</span></td></tr>
+        <tr><td class="mono">core/message.py</td><td>~30</td><td>Message / MessageRole / ToolCall</td><td><span class="tag ok">可用</span></td></tr>
+        <tr><td class="mono">core/agent.py</td><td>~41</td><td>AgentState 状态机 / ExecuteResult / Agent 定义</td><td><span class="tag bad">死代码</span></td></tr>
+        <tr><td class="mono">app.py</td><td>~190</td><td>Streamlit 会话初始化、asyncio 桥接、审批面板、历史渲染</td><td><span class="tag ok">可用</span></td></tr>
+        <tr><td class="mono">simple_agent.py</td><td>~35</td><td>最小 CLI 演示</td><td><span class="tag ok">可用</span></td></tr>
+      </table>
+      <h3><span class="tick">◈</span>配置现状：名存实亡</h3>
+      <p class="muted"><code>.env</code> 定义了 10 项配置，代码实际只读取 <code>OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL</code> 三项。<code>LLM_* / MAX_TURNS / MAX_STEPS / EXECUTION_TIMEOUT_SECONDS / LOG_LEVEL</code> 六项零引用；<code>max_turns</code> 在两个入口硬编码为 5。</p>
+    </section>
+
+    <!-- ================= 04 ================= -->
+    <section id="s4">
+      <div class="sec-head"><span class="no">04</span><h2>关键机制</h2></div>
+
+      <h3><span class="tick">4.1</span>权限模型：声明的五级，实际的三种</h3>
+      <table>
+        <caption>PermissionLevel 声明 vs decide() 实际行为</caption>
+        <tr><th>声明级别</th><th>实际行为</th><th>差距</th></tr>
+        <tr><td class="mono">FULL_TRUST</td><td>直接 ALLOW</td><td>符合声明</td></tr>
+        <tr><td class="mono">ASK_FIRST</td><td>首次 ASK，批准后该 call_id ALLOW</td><td>符合声明</td></tr>
+        <tr><td class="mono">AUTO_WITH_NOTIFICATION</td><td>与 ASK_FIRST 完全相同</td><td><span class="tag bad">无"自动 + 通知"行为</span></td></tr>
+        <tr><td class="mono">APPROVE_ALWAYS</td><td>与 ASK_FIRST 完全相同</td><td><span class="tag bad">无"记住批准"语义</span></td></tr>
+        <tr><td class="mono">MANUAL_ONLY</td><td>直接 DENY</td><td><span class="tag bad">语义错位：应转人工而非拒绝</span></td></tr>
+      </table>
+      <p class="muted">批准是 call_id 粒度的一次性白名单（<code>approved_call_ids: Set[str]</code>），没有工具级 / 参数级的规则记忆，也没有持久化。</p>
+
+      <h3><span class="tick">4.2</span>工具执行：双路径、零校验</h3>
+      <p>存在两个几乎相同的执行原语——<code>ToolRegistry.execute()</code> 与 <code>PermissionGate.execute()</code>，引擎只调用后者，前者冗余。更关键的是：<strong>两者都没有调用 <code>_validate_params</code>（Schema 参数校验）与 <code>_validate_path</code>（目录边界校验）</strong>。白名单与路径沙箱的机制写了，但从未进入执行链路。当前工具执行 = 直接 <code>func(**arguments)</code>：模型幻觉出的未知参数抛 TypeError 被吞成错误字符串，越权路径无法拦截。</p>
+
+      <h3><span class="tick">4.3</span>事件协议：文本前缀行协议</h3>
+      <p>引擎与 UI 之间用文本前缀约定三类事件：<code>[APPROVAL_REQUIRED] {json}</code> → 待审批队列；<code>[Tool {name}] …</code> → 工具日志；其余文本 → 最终回答。脆弱点：事件无类型 schema；UI 端 <code>final_text</code> 会被后一条覆盖；模型输出若恰好以这两个前缀开头会被误分类。</p>
+
+      <h3><span class="tick">4.4</span>做对了的细节：OpenAI 消息配对</h3>
+      <ul class="plain">
+        <li>assistant 带 tool_calls 且 content 为空时，<strong>完全省略 content 键</strong>而非传 <code>null</code>（源码注释明确标注这是关键）；</li>
+        <li>tool 消息必须带 <code>tool_call_id</code>，否则丢弃——避免孤儿 tool 消息触发 API 400；</li>
+        <li>模型返回的 call_id 为空时用 uuid 兜底；参数 JSON 解析失败退 <code>{}</code>。</li>
+      </ul>
+      <p class="muted">这些是实际踩坑后沉淀的兼容性处理，生产化时应原样保留进 Memory v2。</p>
+    </section>
+
+    <!-- ================= 05 ================= -->
+    <section id="s5">
+      <div class="sec-head"><span class="no">05</span><h2>问题清单</h2></div>
+      <table>
+        <caption>P0 · 正确性与安全（上生产前必须关闭）</caption>
+        <tr><th>#</th><th>问题</th><th>位置</th></tr>
+        <tr><td>1</td><td>参数 Schema 校验从未被调用，幻觉参数直接进入函数体</td><td class="mono">tools/registry.py</td></tr>
+        <tr><td>2</td><td>路径沙箱（allowed_paths / _validate_path）从未生效</td><td class="mono">tools/registry.py</td></tr>
+        <tr><td>3</td><td>双执行路径冗余，且都无校验 / 超时 / 审计</td><td class="mono">registry vs gate</td></tr>
+        <tr><td>4</td><td>权限五级语义未落实，声明的信任级别与实际行为不符</td><td class="mono">tools/permission.py</td></tr>
+        <tr><td>5</td><td>工具同步执行阻塞事件循环、无超时；EXECUTION_TIMEOUT_SECONDS 未实现</td><td class="mono">engine / permission</td></tr>
+        <tr><td>6</td><td>调试 print 泄漏全部 messages 与事件流（敏感上下文）</td><td class="mono">provider / app / registry</td></tr>
+      </table>
+      <table>
+        <caption>P1 · 健壮性与能力缺口</caption>
+        <tr><th>#</th><th>问题</th></tr>
+        <tr><td>7</td><td>模型调用无重试 / 退避 / 超时，异常直接抛出使引擎崩溃（run 无 try/except）</td></tr>
+        <tr><td>8</td><td>记忆无持久化、无 token 预算与压缩，长对话必然超限、重启即失忆</td></tr>
+        <tr><td>9</td><td>max_turns 耗尽只 yield 提示，pending tool calls 遗留、续跑行为不可预期</td></tr>
+        <tr><td>10</td><td>system prompt 无注入点（SYSTEM 角色已定义但无调用方）</td></tr>
+        <tr><td>11</td><td>非流式输出，run_until_complete 全量阻塞，长任务不可交互</td></tr>
+        <tr><td>12</td><td>事件协议为文本前缀解析，无类型、有覆盖与误判风险</td></tr>
+        <tr><td>13</td><td>引擎不可重入：并发 run 互相污染 memory；无会话管理抽象</td></tr>
+        <tr><td>14</td><td>core/agent.py 死代码：状态机意图未落地</td></tr>
+        <tr><td>15</td><td>.env 六项配置零引用，max_turns 硬编码</td></tr>
+      </table>
+      <table>
+        <caption>P2 · 工程质量</caption>
+        <tr><th>#</th><th>问题</th></tr>
+        <tr><td>16</td><td>零测试（pytest 已配置，tests/ 不存在）</td></tr>
+        <tr><td>17</td><td>无类型检查 / lint / CI 门禁</td></tr>
+        <tr><td>18</td><td>包名 scratch 为占位名；examples/ 空包；可发布性为零</td></tr>
+        <tr><td>19</td><td>无可观测性：无结构化日志、无 trace、无指标（token 用量也未统计）</td></tr>
+        <tr><td>20</td><td>工具结果无治理：任意长度结果直接入 memory（截断仅在显示层）</td></tr>
+      </table>
+    </section>
+
+    <!-- ================= 06 ================= -->
+    <section id="s6">
+      <div class="sec-head"><span class="no">06</span><h2>生产级目标架构</h2></div>
+      <p>以指南五大原则为决策准绳——<strong>约束优先、可验证性、渐进信任、故障假设、智能体工效</strong>——并建议生产定位对齐 Claude Code 的任务型范式（按需启停 + 权限模式 + 可扩展工作流），而非 OpenClaw 的常驻自驱型，除非业务需要后台自主运行。</p>
+      <figure>
+        <svg viewBox="0 0 960 560" role="img" aria-label="生产级目标架构图">
+          <rect x="0.5" y="0.5" width="959" height="559" fill="#fdfdfe" stroke="none"/>
+          <!-- 接入层 -->
+          <text class="svg-small" x="30" y="30">接入层（多客户端）</text>
+          <rect x="30" y="40" width="180" height="42" fill="none" stroke="#16181d"/><text class="svg-label" x="120" y="65" text-anchor="middle">Web UI / CLI</text>
+          <rect x="230" y="40" width="180" height="42" fill="none" stroke="#16181d"/><text class="svg-label" x="320" y="65" text-anchor="middle">HTTP API</text>
+          <rect x="430" y="40" width="200" height="42" fill="none" stroke="#16181d"/><text class="svg-label" x="530" y="65" text-anchor="middle">Webhook / 定时触发</text>
+          <!-- 编排平面 -->
+          <text class="svg-small" x="680" y="30">编排平面（新增）</text>
+          <rect x="680" y="40" width="250" height="100" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="696" y="62">Orchestrator</text>
+          <text class="svg-small" x="696" y="79">任务分解 · 状态机</text>
+          <text class="svg-small" x="696" y="93">子智能体 · 审批挂起/恢复</text>
+          <text class="svg-label-b" x="696" y="115">Workflow Engine</text>
+          <text class="svg-small" x="696" y="132">DAG · 检查点 · 恢复</text>
+          <!-- 运行时 -->
+          <text class="svg-small" x="30" y="112">运行时平面</text>
+          <rect x="30" y="122" width="600" height="88" fill="#f0f6f8" stroke="#155e75"/>
+          <text class="svg-label-b" x="46" y="145" fill="#0c4a5e">RuntimeEngine v2</text>
+          <text class="svg-small" x="46" y="162" fill="#4a5058">结构化事件流（typed dataclass）· 漂移检测 · Token / 轮次双预算</text>
+          <text class="svg-small" x="46" y="176" fill="#4a5058">system prompt 注入点 · 异常兜底 · 崩溃恢复（checkpoint）</text>
+          <text class="svg-small" x="46" y="190" fill="#4a5058">Session Manager：会话隔离 · 并发控制 · session_id 贯穿</text>
+          <!-- 安全平面 -->
+          <text class="svg-small" x="30" y="240">安全平面 —— 执行收口链路（唯一入口）</text>
+          <rect x="30" y="250" width="900" height="92" fill="none" stroke="#155e75"/>
+          <rect x="52" y="272" width="170" height="48" fill="#f0f6f8" stroke="#155e75"/><text class="svg-label" x="137" y="292" text-anchor="middle" fill="#0c4a5e">Validator</text><text class="svg-small" x="137" y="308" text-anchor="middle">Schema 强校验 · 注入防护</text>
+          <line x1="222" y1="296" x2="252" y2="296" stroke="#155e75" marker-end="url(#arrA)"/>
+          <rect x="256" y="272" width="170" height="48" fill="#f0f6f8" stroke="#155e75"/><text class="svg-label" x="341" y="292" text-anchor="middle" fill="#0c4a5e">PermissionGate v2</text><text class="svg-small" x="341" y="308" text-anchor="middle">规则引擎 · 渐进信任</text>
+          <line x1="426" y1="296" x2="456" y2="296" stroke="#155e75" marker-end="url(#arrA)"/>
+          <rect x="460" y="272" width="170" height="48" fill="#f0f6f8" stroke="#155e75"/><text class="svg-label" x="545" y="292" text-anchor="middle" fill="#0c4a5e">Tool Sandbox</text><text class="svg-small" x="545" y="308" text-anchor="middle">超时 · 资源限制 · 路径边界</text>
+          <line x1="630" y1="296" x2="660" y2="296" stroke="#155e75" marker-end="url(#arrA)"/>
+          <rect x="664" y="272" width="120" height="48" fill="#f0f6f8" stroke="#155e75"/><text class="svg-label" x="724" y="292" text-anchor="middle" fill="#0c4a5e">Audit Log</text><text class="svg-small" x="724" y="308" text-anchor="middle">全调用审计</text>
+          <line x1="784" y1="296" x2="814" y2="296" stroke="#155e75" marker-end="url(#arrA)"/>
+          <rect x="818" y="272" width="90" height="48" fill="#f0f6f8" stroke="#155e75"/><text class="svg-label" x="863" y="292" text-anchor="middle" fill="#0c4a5e">Executor</text><text class="svg-small" x="863" y="308" text-anchor="middle">单点执行</text>
+          <!-- 能力平面 -->
+          <text class="svg-small" x="30" y="372">能力平面</text>
+          <rect x="30" y="382" width="290" height="66" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="46" y="404">Tool Registry v2 + MCP Client</text>
+          <text class="svg-small" x="46" y="421">动态加载 · allowlist 门控</text>
+          <text class="svg-small" x="46" y="435">MCP：stdio / Streamable HTTP</text>
+          <rect x="340" y="382" width="290" height="66" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="356" y="404">Memory System v2</text>
+          <text class="svg-small" x="356" y="421">SQLite 持久化 · 分层记忆 · 检索</text>
+          <text class="svg-small" x="356" y="435">上下文组装 · 自动压缩 · 可写记忆</text>
+          <rect x="650" y="382" width="280" height="66" fill="none" stroke="#16181d"/>
+          <text class="svg-label-b" x="666" y="404">Provider v2 + Output Governance</text>
+          <text class="svg-small" x="666" y="421">重试 / 退避 / 降级 · 流式</text>
+          <text class="svg-small" x="666" y="435">结构化输出 · 质量门 · 幻觉检测</text>
+          <!-- 横切 -->
+          <text class="svg-small" x="30" y="478">横切</text>
+          <rect x="30" y="488" width="900" height="52" fill="none" stroke="#8a919b" stroke-dasharray="4 3"/>
+          <text class="svg-label" x="160" y="510" text-anchor="middle">Observability · OTel traces / metrics / 结构化日志</text>
+          <text class="svg-label" x="480" y="510" text-anchor="middle">Config Center · 分层配置 · 特性门控</text>
+          <text class="svg-label" x="790" y="510" text-anchor="middle">Persistence · SQLite → Postgres</text>
+          <text class="svg-small" x="160" y="528" text-anchor="middle">替换全部 print · LOG_LEVEL 生效</text>
+          <text class="svg-small" x="480" y="528" text-anchor="middle">.env 全量生效 · FEATURE_* 灰度</text>
+          <text class="svg-small" x="790" y="528" text-anchor="middle">接口抽象 · 可换后端</text>
+        </svg>
+        <figcaption>图 3 · 目标架构 —— 实线青框为执行收口链路，虚线框为横切设施</figcaption>
+      </figure>
+
+      <div class="note">
+        <div class="note-t">与现状的三点本质差异</div>
+        <p><strong>执行收口</strong>——所有工具调用必经 Validator → Gate → Sandbox → Audit 单一链路，无旁路；<strong>状态外置</strong>——memory / 工作流状态落盘，进程可死可复活；<strong>平面解耦</strong>——模型、工具、记忆、权限各有接口契约，可独立替换。</p>
+      </div>
+
+      <h3><span class="tick">6.1</span>各子系统目标（摘要）</h3>
+      <table>
+        <caption>子系统 × 现状 → 目标</caption>
+        <tr><th>子系统</th><th>现状</th><th>目标</th></tr>
+        <tr><td class="mono">RuntimeEngine v2</td><td>文本事件 · 无 system prompt · 不可重入</td><td>类型化事件（TurnStarted / ApprovalRequested / ToolExecuted / Error / BudgetExceeded…）· prompt 注入 · Session 上下文 · 双预算 · 异常转 Error 事件</td></tr>
+        <tr><td class="mono">ToolExecutor</td><td>双路径 · 零校验 · 阻塞执行</td><td>单点流水线：查表 → Schema 强校验 → 路径边界 → 权限裁决 → 沙箱执行（超时 + 资源限制）→ 结果治理 → 审计落盘</td></tr>
+        <tr><td class="mono">PermissionGate v2</td><td>枚举分支名存实亡</td><td>五级语义落实：AUTO_WITH_NOTIFICATION 自动执行异步通知；APPROVE_ALWAYS 按 (tool, 参数指纹) 记忆并落盘；MANUAL_ONLY 转人工（HANDOFF）而非 DENY</td></tr>
+        <tr><td class="mono">Memory v2</td><td>纯内存 List</td><td>四期：SQLite 持久化 → ContextAssembler 按预算装配 → 自动 compaction（旧轮摘要化，保留未完成工具调用）→ 可写长期记忆（走权限门控）</td></tr>
+        <tr><td class="mono">Provider v2</td><td>裸调用 · 调试 print</td><td>指数退避重试（429/5xx/超时）· 降级链 · chat_stream 流式 · usage 进 metrics 与预算 · 输出质量门与幻觉检测</td></tr>
+        <tr><td class="mono">编排平面</td><td>无</td><td>Task 状态机（PLANNED→RUNNING→WAITING_APPROVAL→DONE/FAILED）+ Coordinator 多智能体（子智能体独立 memory 与预算）</td></tr>
+        <tr><td class="mono">可观测 / 配置</td><td>print + 6 项死配置</td><td>OTel 三件套（run 一条 trace，工具/模型调用为 span）· 分层配置全量生效 · FEATURE_* 特性门控</td></tr>
+      </table>
+
+      <h3><span class="tick">6.2</span>安全设计要点（指南第 12 章威胁模型）</h3>
+      <ul class="plain">
+        <li><strong>提示注入防护</strong>：工具结果按不可信数据处理——进 memory 前做围栏标记（包裹 + 来源角色声明），执行类工具对结果中的指令样文本告警。</li>
+        <li><strong>审批防篡改</strong>：审批对象带 call_id + 参数哈希，批准执行前校验参数未变。</li>
+        <li><strong>路径防护</strong>：resolve + is_relative_to 已有，补符号链接解析与 Windows 盘符 / UNC 逃逸防护。</li>
+        <li><strong>密钥卫生</strong>：.env 不入库；日志、审计、异常中自动脱敏 key 与敏感路径。</li>
+        <li><strong>审计日志</strong>：who（session）/ when / what（tool + 参数哈希）/ decision / 结果元数据，SQLite 起步。</li>
+      </ul>
+    </section>
+
+    <!-- ================= 07 ================= -->
+    <section id="s7">
+      <div class="sec-head"><span class="no">07</span><h2>验收清单</h2></div>
+      <p class="muted">以"能上生产"为标准（对应指南第 13 章评估方法论），按优先级分四组基线。</p>
+      <h4>P0 · 正确性与安全（上生产前必须）</h4>
+      <ul class="check">
+        <li>所有工具调用经过单一执行链路（校验 → 权限 → 沙箱 → 审计），无旁路</li>
+        <li>参数 Schema 校验全量生效；路径类工具 100% 有目录边界</li>
+        <li>工具执行有超时上限；模型调用有超时 + 重试；引擎异常不崩溃、可恢复</li>
+        <li>权限五级语义与声明一致；审批可持久化、可审计；拒绝与转人工路径分离</li>
+        <li>无调试输出泄漏（print 清零，密钥脱敏）</li>
+        <li>轮次 / Token 预算耗尽行为确定：合法回填 + 明确终止事件</li>
+      </ul>
+      <h4>P1 · 可靠性与可运营</h4>
+      <ul class="check">
+        <li>会话与消息持久化；进程重启后可恢复进行中的任务</li>
+        <li>结构化事件协议 + 流式输出</li>
+        <li>上下文自动压缩，长会话不因 token 超限失败</li>
+        <li>OTel trace + 核心指标（turn 数 / token / 工具延迟与失败率 / 审批等待时长）+ 结构化日志</li>
+        <li>配置全量生效 + 特性门控</li>
+      </ul>
+      <h4>P1 · 工程质量</h4>
+      <ul class="check">
+        <li>测试体系：工具层单测（校验 / 权限 / 沙箱）· 引擎 loop 集成测试（mock 模型）· 审批挂起/恢复端到端 · 回归集</li>
+        <li>类型检查（pyright 已配置）+ lint + CI 门禁</li>
+        <li>包正名、模块边界清晰、public API 有 docstring</li>
+        <li>评估基线：固定任务集的端到端成功率 / 步数 / token 成本 benchmark，防止演进退化</li>
+      </ul>
+      <h4>P2 · 生态扩展（按业务需要）</h4>
+      <ul class="check">
+        <li>MCP 客户端（stdio + HTTP），外部工具与本地工具同一安全链路</li>
+        <li>任务编排 + 多智能体 Coordinator</li>
+        <li>插件体系（工具包 / 子智能体 / 钩子三类扩展点）</li>
+        <li>可写长期记忆</li>
+      </ul>
+    </section>
+
+    <!-- ================= 08 ================= -->
+    <section id="s8">
+      <div class="sec-head"><span class="no">08</span><h2>路线图与决策</h2></div>
+      <div class="roadmap">
+        <div class="rm-item">
+          <div class="rm-head"><span class="m">M1</span><b>安全收口</b></div>
+          <p>执行链路单点化 · Schema / 路径校验生效 · 工具超时 · print 清理 · 引擎异常兜底。<br>交付判据：问题清单 P0 #1–6 全部关闭；delete_file 类危险工具在无审批时不可执行。</p>
+        </div>
+        <div class="rm-item">
+          <div class="rm-head"><span class="m">M2</span><b>可靠运行</b></div>
+          <p>SQLite 持久化 · 结构化事件 + 流式 · Provider 重试 / 降级 · 配置全量生效 · 核心测试集。<br>交付判据：杀进程重启后对话可续；模型断连自动恢复；核心链路有测试覆盖。</p>
+        </div>
+        <div class="rm-item">
+          <div class="rm-head"><span class="m">M3</span><b>生产运营</b></div>
+          <p>上下文压缩 · 审批持久化 + 渐进信任 · OTel 可观测 · 特性门控 · benchmark 基线。<br>交付判据：千轮长会话稳定运行；全链路 trace 可查；审批记录可审计。</p>
+        </div>
+        <div class="rm-item">
+          <div class="rm-head"><span class="m">M4</span><b>生态扩展</b></div>
+          <p>MCP 集成 · 任务编排 · 多智能体 · 插件体系 · 可写记忆。<br>交付判据：外部 MCP 工具可挂载且有权限门控；多步任务可编排。</p>
+        </div>
+      </div>
+
+      <table>
+        <caption>关键设计决策记录（ADR 建议）</caption>
+        <tr><th>决策</th><th>选择</th><th>理由</th><th>备选</th></tr>
+        <tr><td>语言 / 运行时</td><td>维持 Python</td><td>与指南实战一致、团队栈、生态够用</td><td>Rust（Codex 路线，性能强但成本高）</td></tr>
+        <tr><td>持久化</td><td>SQLite 起步 → Postgres</td><td>单机零运维，接口抽象后可换</td><td>直接 Postgres（多租户时）</td></tr>
+        <tr><td>事件协议</td><td>类型化 dataclass + pydantic 校验</td><td>UI 契约明确、可演进</td><td>文本前缀协议（现状，弃）</td></tr>
+        <tr><td>权限模型</td><td>规则引擎 + 指纹记忆</td><td>渐进信任可配置、可审计</td><td>纯枚举分支（现状，弃）</td></tr>
+        <tr><td>沙箱</td><td>应用层沙箱（校验 + 超时 + 资源限制）</td><td>跨平台（当前 Windows 环境）</td><td>OS 级沙箱（Bubblewrap / Seatbelt，Linux 部署时叠加）</td></tr>
+        <tr><td>产品定位</td><td>Claude Code 式任务型（按需启停）</td><td>与教学代码形态最近、复杂度最低</td><td>OpenClaw 式常驻自驱（需 Gateway 平面）</td></tr>
+      </table>
+    </section>
+
+    </main>
+  </div>
+
+  <footer>
+    <span>MiniHarness · Harness Engineering Guide</span>
+    <span>Architecture Review · 2026-09-22</span>
+  </footer>
+</div>
+</body>
+</html>

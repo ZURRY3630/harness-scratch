@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiniHarness</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div id="app" v-cloak>
+  <!-- ================= 侧栏 ================= -->
+  <aside class="sidebar">
+    <div class="brand">
+      <h1>MiniHarness</h1>
+      <p>Vue 3 · FastAPI SSE</p>
+    </div>
+
+    <button class="btn-new" @click="newSession" :disabled="streaming">＋ 新会话</button>
+
+    <div class="tabs">
+      <button :class="{on: tab==='sessions'}" @click="tab='sessions'">会话</button>
+      <button :class="{on: tab==='memories'}" @click="openMemories">长期记忆</button>
+    </div>
+
+    <!-- 会话列表 -->
+    <div v-if="tab==='sessions'" class="list">
+      <div v-for="s in sessions" :key="s.session_id"
+           class="sess" :class="{active: s.session_id===sessionId}"
+           @click="switchSession(s)">
+        <span class="sess-title">{{ s.title }}</span>
+        <button class="del" title="删除" @click.stop="deleteSession(s.session_id)">✕</button>
+      </div>
+      <div v-if="!sessions.length" class="empty">暂无会话</div>
+    </div>
+
+    <!-- 长期记忆 -->
+    <div v-else class="list">
+      <div class="mem-add">
+        <input v-model="newMemory" placeholder="写入一条记忆…" @keyup.enter="addMemory">
+        <button @click="addMemory" :disabled="!newMemory.trim()">存</button>
+      </div>
+      <div v-for="m in memories" :key="m.memory_id" class="mem">
+        <span class="mem-kind">{{ m.kind }}</span>
+        <span class="mem-content" :title="m.content">{{ m.content }}</span>
+        <button class="del" title="删除" @click="deleteMemory(m.memory_id)">✕</button>
+      </div>
+      <div v-if="!memories.length" class="empty">暂无长期记忆</div>
+    </div>
+
+    <!-- 用量统计 -->
+    <div class="stats" v-if="usage">
+      <div><span>上下文估算</span><b>{{ usage.estimated_context_tokens }}</b></div>
+      <div><span>prompt / completion</span><b>{{ usage.prompt_tokens }} / {{ usage.completion_tokens }}</b></div>
+      <div><span>LLM 调用 / 缓存命中</span><b>{{ usage.llm_calls }} / {{ usage.cache_hits }}</b></div>
+      <div><span>压缩次数</span><b>{{ usage.compressions }}</b></div>
+    </div>
+  </aside>
+
+  <!-- ================= 主区 ================= -->
+  <div class="main">
+    <div class="header">
+      <span class="title"><span class="dot" :class="{busy: streaming}"></span>{{ sessionId ? sessTitle : '选择或新建会话' }}</span>
+      <span class="status">{{ statusText }}</span>
+    </div>
+
+    <div class="feed" ref="feedEl">
+      <div v-if="!feed.length" class="empty-main">输入消息开始对话</div>
+
+      <template v-for="(m, i) in feed" :key="i">
+        <div v-if="m.type==='user'" class="msg user">{{ m.text }}</div>
+
+        <div v-else-if="m.type==='assistant'" class="msg assistant">
+          {{ m.text }}<span v-if="m.streaming" class="caret"></span>
+        </div>
+
+        <div v-else-if="m.type==='summary'" class="msg summary">{{ m.text }}</div>
+
+        <div v-else-if="m.type==='tool'" class="tool-card" :class="{err: m.err}">
+          <div class="tt">{{ m.err ? '✕' : '⚙' }} {{ m.tool }}</div>
+          <div class="tr">{{ m.text }}</div>
+        </div>
+
+        <div v-else-if="m.type==='status'" class="status-line">{{ m.text }}</div>
+      </template>
+
+      <!-- 审批卡片 -->
+      <div v-if="pendingApproval" class="approval">
+        <h3>⚠ 工具调用等待审批</h3>
+        <div class="kv">工具：<code>{{ pendingApproval.tool_name }}</code></div>
+        <div class="kv">参数：<code>{{ approvalArgs }}</code></div>
+        <label><input type="checkbox" v-model="remember"> 记住同类调用（APPROVE_ALWAYS）</label>
+        <div class="hint">提示：不批准而直接发送新消息，将自动取消此调用</div>
+        <div class="row">
+          <button class="btn-approve" @click="answerApproval('approved')" :disabled="streaming">批准</button>
+          <button class="btn-deny" @click="answerApproval('denied')" :disabled="streaming">拒绝</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <textarea v-model="draft" ref="inputEl" rows="1"
+                placeholder="输入消息…（Enter 发送，Shift+Enter 换行）"
+                @keydown.enter.exact.prevent="send"
+                @input="autoResize"></textarea>
+      <button @click="send" :disabled="streaming || !draft.trim()">发送</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/vendor/vue.global.prod.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

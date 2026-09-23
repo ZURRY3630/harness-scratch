@@ -1,0 +1,1 @@
+"""MiniHarness package."""
