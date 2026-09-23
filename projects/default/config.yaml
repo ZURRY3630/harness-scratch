@@ -1,0 +1,28 @@
+# =============================================================================
+# 项目配置：default（内置默认项目）
+# =============================================================================
+#
+# 未在这里声明的字段全部来自 configs/default.yaml + 环境变量层，见该文件注释。
+# 相对路径按**本文件所在目录**解析。
+
+name: default
+agent_name: MiniHarness
+language: 中文
+
+system_prompt_path: prompts/system.md
+
+tools:
+  # 顺序即前端「工具」页签的展示顺序
+  builtin:
+    - echo
+    - get_time
+    - simulate_delete_file
+    - memory_save
+    - memory_search
+  plugins_dir: tools
+
+permission:
+  # 工具带路径参数时的可写边界（防 ../ 与符号链接逃逸）
+  allowed_paths:
+    - E:/code/ai/harness-scratch
+    - C:/Users/11383/.openclaw-autoclaw/workspace

@@ -1,0 +1,56 @@
+# =============================================================================
+# 示例项目配置（模板，默认不加载）
+# =============================================================================
+#
+# 用途：展示一个项目配置可以覆盖哪些字段、怎么写。复制到
+# `projects/<你的项目>/config.yaml` 后按需修改，再通过环境变量切换：
+#
+#     # PowerShell
+#     $env:PROJECT_CONFIG_PATH = "projects/my_project/config.yaml"
+#     python -m uvicorn mini_harness.main:app --app-dir backend --port 8765
+#
+# 未声明的字段沿用 configs/default.yaml + 环境变量层。
+# 相对路径按**本文件所在目录**解析（所以这里写 ../projects/...）。
+
+name: default
+agent_name: MiniHarness
+language: 中文
+
+system_prompt_path: ../projects/default/prompts/system.md
+
+# --- 只覆盖想改的字段，下面这些是"写全"的示例 ---
+provider:
+  type: openai
+  temperature: 0.0
+
+memory:
+  type: sqlite
+  longterm_top_k: 3
+
+budget:
+  context_token_budget: 24000
+  reserve_output_tokens: 4096
+  compress_threshold: 0.8
+
+compressor:
+  keep_recent: 8
+
+tools:
+  builtin:
+    - echo
+    - get_time
+    - simulate_delete_file
+    - memory_save
+    - memory_search
+  plugins_dir: ../projects/default/tools
+
+permission:
+  approval_store: true
+  allowed_paths:
+    - E:/code/ai/harness-scratch
+    - C:/Users/11383/.openclaw-autoclaw/workspace
+
+hooks: []
+
+max_turns: 10
+tool_timeout: 300.0

@@ -1,0 +1,66 @@
+# =============================================================================
+# 全局默认值（框架级）：所有项目配置（projects/<name>/config.yaml）都在此之上覆盖
+# =============================================================================
+#
+# 取值规则：
+#   - 写了具体值  -> 用它；
+#   - 写 null 或省略 -> 回填「环境变量层」（.env / core/config.py 的 Config），
+#     对应关系写在每个字段后面的注释里；
+#   - 路径字段的相对路径按**本项目配置文件所在目录**解析（null 回退的环境变量值除外）。
+#
+# 注意：内核对 `configs/default.yaml` 是硬依赖（缺失即启动报错），它同时充当说明文档。
+
+# --- 身份 ---
+name: default                 # 项目标识（仅用于展示/排障）
+agent_name: Agent             # 注入 {{AGENT_NAME}}
+language: 中文                 # 注入 {{LANGUAGE}}
+
+# --- 提示词 ---
+# 项目级 System Prompt 的 md 文件；null 表示只用框架级 prompts/base_system.md
+system_prompt_path: null
+
+# --- 模型供应商 ---
+provider:
+  type: openai                # 实现类型（P1-1 起由组件注册表解析）
+  model: null                 # null -> LLM_MODEL / OPENAI_MODEL
+  api_key: null               # null -> LLM_API_KEY / OPENAI_API_KEY（密钥只放在 .env）
+  base_url: null              # null -> LLM_BASE_URL / OPENAI_BASE_URL
+  temperature: 0.0
+  max_retries: 2
+  request_timeout: 120.0
+
+# --- 记忆后端 ---
+memory:
+  type: sqlite                # 实现类型（P1-1 起由组件注册表解析）
+  path: null                  # null -> MEMORY_DB_PATH
+  longterm_top_k: null        # null -> LONGTERM_TOP_K
+
+# --- Token 预算 ---
+budget:
+  context_token_budget: null      # null -> CONTEXT_TOKEN_BUDGET
+  reserve_output_tokens: null     # null -> RESERVE_OUTPUT_TOKENS
+  compress_threshold: null        # null -> COMPRESS_THRESHOLD
+
+# --- 上下文压缩 ---
+compressor:
+  keep_recent: null           # null -> KEEP_RECENT_MESSAGES
+
+# --- 上下文组装 ---
+assembler: {}                 # 预留（当前组装器无可配置参数）
+
+# --- 工具 ---
+tools:
+  builtin: []                 # 内置工具**工具名**白名单，例如 [echo, get_time, memory_save]
+  plugins_dir: null           # 项目专属工具目录（扫描其中 @tool 函数）
+
+# --- 权限门控 ---
+permission:
+  allowed_paths: []           # 工具路径参数的可写边界；可用环境变量 HARNESS_ALLOWED_PATHS 覆盖
+  approval_store: true        # 审批记录是否持久化到 DB（false 则仅进程内存）
+
+# --- 生命周期钩子（P0-3）---
+hooks: []                     # Hook 类的导入路径，例如 [projects.coding_agent.hooks.LoggingHooks]
+
+# --- 引擎行为 ---
+max_turns: null               # null -> MAX_TURNS
+tool_timeout: null            # null -> EXECUTION_TIMEOUT_SECONDS
