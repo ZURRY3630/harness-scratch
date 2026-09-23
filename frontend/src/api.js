@@ -6,6 +6,9 @@ async function jsonOrThrow(r) {
 }
 
 export const api = {
+  // ---- 运行时信息（当前项目的 agent 名等）----
+  health: () => fetch('/api/health').then(jsonOrThrow),
+
   // ---- 会话 ----
   listSessions: () => fetch('/api/sessions').then(jsonOrThrow),
   createSession: () => fetch('/api/sessions', { method: 'POST' }).then(jsonOrThrow),

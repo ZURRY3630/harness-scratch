@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .api.routes import router
+from .api.routes import get_project_config, router
 from .core.config import get_config
 
 app = FastAPI(title="MiniHarness API", version="0.3.0")
@@ -55,4 +55,12 @@ if _DIST.exists():
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "version": "0.3.0", "frontend": "built" if _DIST.exists() else "not-built"}
+    """健康检查 + 当前项目信息（前端启动时取 agent_name 用于展示）。"""
+    project = get_project_config()
+    return {
+        "status": "ok",
+        "version": "0.3.0",
+        "frontend": "built" if _DIST.exists() else "not-built",
+        "project": project.name,
+        "agent_name": project.agent_name,
+    }

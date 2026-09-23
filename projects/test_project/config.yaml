@@ -1,0 +1,26 @@
+# =============================================================================
+# 示例项目：代码审查助手
+# =============================================================================
+#
+# 用途：演示"新增一个领域项目"的最短路径 —— 只需复制 projects/default/，改本文件与提示词，
+#      内核（backend/mini_harness/）零改动。启用方式：
+#
+#     $env:PROJECT_CONFIG_PATH = "projects/test_project/config.yaml"
+#     python -m uvicorn mini_harness.main:app --app-dir backend --port 8765
+#
+# 该项目同时用于演示钩子链路（hooks 启用后会打印每次 LLM 调用与工具执行）。
+
+name: test_project
+agent_name: 代码审查助手
+language: 中文
+
+system_prompt_path: prompts/system.md
+
+tools:
+  builtin:
+    - get_time
+    - memory_search
+  plugins_dir: tools
+
+hooks:
+  - projects.test_project.hooks.LoggingHooks

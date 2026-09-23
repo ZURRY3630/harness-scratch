@@ -13,6 +13,7 @@ import { api } from './api.js'
 const tab = ref('sessions')
 const sessionId = ref(null)
 const sessTitle = ref('')
+const agentName = ref('Agent')   // 由 /api/health 按当前项目配置填充
 const feed = ref([])
 const streaming = ref(false)
 const statusText = ref('就绪')
@@ -156,13 +157,24 @@ function onApproval(decision, remember) {
 // ---------- 记忆/工具面板 ----------
 function openMemories() { tab.value = 'memories' }
 
-onMounted(() => { setStatus('就绪') })
+onMounted(async () => {
+  setStatus('就绪')
+  try {
+    const h = await api.health()
+    if (h.agent_name) {
+      agentName.value = h.agent_name
+      document.title = h.agent_name
+    }
+  } catch {
+    // 取不到就用默认名，不影响对话
+  }
+})
 </script>
 
 <template>
   <aside class="sidebar">
     <div class="brand">
-      <h1>MiniHarness</h1>
+      <h1>{{ agentName }}</h1>
       <p>Vue 3 SFC · Vite</p>
     </div>
     <button class="btn-new" :disabled="streaming" @click="onNewSession">＋ 新会话</button>
