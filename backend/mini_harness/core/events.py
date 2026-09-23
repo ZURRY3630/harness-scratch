@@ -1,3 +1,4 @@
+# DOC: docs/contracts.md
 """类型化事件：引擎 -> 外部世界的唯一契约（取代文本前缀行协议）。"""
 
 from __future__ import annotations

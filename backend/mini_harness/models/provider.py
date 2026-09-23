@@ -1,3 +1,4 @@
+# DOC: docs/08-custom-provider.md
 """模型供应商抽象：chat（工具调用）+ chat_text（内部用，如压缩摘要）+ 流式。"""
 
 from __future__ import annotations

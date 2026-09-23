@@ -1,3 +1,4 @@
+# DOC: docs/03-architecture.md
 """RuntimeEngine：Agent Loop，唯一执行入口。
 
 循环（每轮）：

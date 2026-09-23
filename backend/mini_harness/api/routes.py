@@ -1,3 +1,4 @@
+# DOC: docs/03-architecture.md
 """FastAPI 路由：会话管理 + SSE 聊天流 + 审批/转人工 + 长期记忆管理。
 
 组装层（build_engine）是**纯配置驱动**的：这里只做反射构造与依赖注入，

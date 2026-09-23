@@ -1,3 +1,4 @@
+# DOC: docs/06-configure.md
 """统一配置，两层分离：
 
 - 环境变量层 `Config` / `get_config()`：部署相关信息（密钥、端点、路径、运维参数）；

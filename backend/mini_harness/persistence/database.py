@@ -1,3 +1,4 @@
+# DOC: docs/09-custom-memory.md
 """SQLite 持久化：会话 / 消息 / 摘要 / 长期记忆 / 审批记录。
 
 设计约束：

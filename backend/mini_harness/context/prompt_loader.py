@@ -1,3 +1,4 @@
+# DOC: docs/06-configure.md
 """System Prompt 加载器：框架级 base_system.md + 项目级 system.md 拼接 + 模板变量替换。
 
 分层约定（与 Prompt 缓存的前缀稳定原则一致）：

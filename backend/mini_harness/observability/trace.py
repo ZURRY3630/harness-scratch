@@ -1,3 +1,4 @@
+# DOC: docs/12-observability.md
 """Trace 落盘接口（P1-4）：把引擎事件流持久化，供回放 / 评测 / 排障。
 
 契约：

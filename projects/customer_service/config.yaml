@@ -1,0 +1,21 @@
+# =============================================================================
+# 项目配置：客服助手
+# =============================================================================
+
+name: customer_service
+agent_name: 客服助手
+language: 中文
+
+system_prompt_path: prompts/system.md
+
+tools:
+  builtin:
+    - memory_save
+    - memory_search
+  plugins_dir: tools
+
+permission:
+  approval_store: true
+
+hooks:
+  - projects.customer_service.hooks.PIIMaskHooks

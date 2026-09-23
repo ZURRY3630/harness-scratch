@@ -1,3 +1,4 @@
+# DOC: docs/08-custom-provider.md
 """OpenAI 兼容供应商：流式 + 重试 + Prompt 缓存友好。
 
 Prompt 缓存说明：

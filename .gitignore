@@ -12,6 +12,7 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .pytest_tmp/
+.pytest_tmp*/
 
 # --- 运行数据（SQLite） ---
 data/*.db

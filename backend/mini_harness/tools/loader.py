@@ -1,3 +1,4 @@
+# DOC: docs/07-custom-tools.md
 """工具装载器：按配置把内置工具与项目插件工具注册进 ToolRegistry。
 
 两个装载来源：

@@ -1,4 +1,4 @@
-# MiniHarness v0.3
+# MiniHarness v0.4
 
 最小但生产向的 Agent Harness：FastAPI + Vue 3 (Vite/npm) 前后端分离 + 上下文压缩 / 长期记忆 / Prompt 缓存 / Token 预算。
 

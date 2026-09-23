@@ -13,10 +13,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from . import __version__
 from .api.routes import get_project_config, router
 from .core.config import get_config
 
-app = FastAPI(title="MiniHarness API", version="0.3.0")
+app = FastAPI(title="MiniHarness API", version=__version__)
 
 cfg = get_config()
 app.add_middleware(
@@ -59,7 +60,7 @@ async def health():
     project = get_project_config()
     return {
         "status": "ok",
-        "version": "0.3.0",
+        "version": __version__,
         "frontend": "built" if _DIST.exists() else "not-built",
         "project": project.name,
         "agent_name": project.agent_name,

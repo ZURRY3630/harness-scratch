@@ -1,3 +1,4 @@
+# DOC: docs/09-custom-memory.md
 """长期记忆库：跨会话持久化的用户偏好 / 项目事实。
 
 - 存储：SQLite longterm_memories 表
