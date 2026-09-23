@@ -55,6 +55,7 @@ tools:
 
 # --- 权限门控 ---
 permission:
+  type: interactive           # 实现类型（P1-1 由组件注册表解析）
   allowed_paths: []           # 工具路径参数的可写边界；可用环境变量 HARNESS_ALLOWED_PATHS 覆盖
   approval_store: true        # 审批记录是否持久化到 DB（false 则仅进程内存）
 

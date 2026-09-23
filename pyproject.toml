@@ -30,6 +30,7 @@ packages = [
     "mini_harness.memory", "mini_harness.context", "mini_harness.models",
     "mini_harness.tools", "mini_harness.tools.builtin", "mini_harness.sdk",
     "mini_harness.runtime", "mini_harness.api",
+    "mini_harness.observability", "mini_harness.eval",
 ]
 
 [tool.pytest.ini_options]

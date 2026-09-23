@@ -19,11 +19,13 @@ from typing import AsyncIterator, Optional
 from openai import AsyncOpenAI
 
 from ..core.message import ToolCall
+from ..core.registry import register_provider
 from .provider import BaseModelProvider, ModelResponse
 
 _RETRY_STATUS = {429, 500, 502, 503, 504}
 
 
+@register_provider("openai")
 class OpenAIProvider(BaseModelProvider):
     def __init__(
         self,

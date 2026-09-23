@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
@@ -30,6 +31,18 @@ class Event:
 
     def to_dict(self) -> dict:
         return {"type": self.type.value, "data": self.data, "session_id": self.session_id}
+
+    def to_trace_dict(self) -> dict:
+        """结构化 trace 记录（P1-4）：扁平字段 + 时间戳，可直接 JSON 序列化。
+
+        与 `to_dict()`（SSE 下发格式）分开：trace 需要能独立回放，故带上写入时刻。
+        """
+        return {
+            "ts": time.time(),
+            "event": self.type.value,
+            "session_id": self.session_id,
+            "data": self.data,
+        }
 
 
 def ev(type_: EventType, session_id: str = "", **data: Any) -> Event:

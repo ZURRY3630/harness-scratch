@@ -54,11 +54,13 @@ def test_list_tool_permissions(db):
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     """独立 TestClient：临时 DB + 独立 engine 容器。"""
+    from collections import OrderedDict
+
     import mini_harness.api.routes as routes
 
     monkeypatch.setattr(routes, "_db", None)
     monkeypatch.setattr(routes, "_longterm", None)
-    monkeypatch.setattr(routes, "_engines", {})
+    monkeypatch.setattr(routes, "_engines", OrderedDict())
 
     from mini_harness.main import app
     return TestClient(app)

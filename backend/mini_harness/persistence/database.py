@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
+from ..core.registry import register_memory
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
     session_id TEXT PRIMARY KEY,
@@ -72,6 +74,7 @@ CREATE TABLE IF NOT EXISTS tool_permissions (
 """
 
 
+@register_memory("sqlite")
 class Database:
     """线程安全的 SQLite 访问（FastAPI 线程池 + 引擎协程都会碰到）。"""
 

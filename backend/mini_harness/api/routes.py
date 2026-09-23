@@ -10,6 +10,7 @@ import asyncio
 import json
 import os
 import uuid
+from collections import OrderedDict
 from pathlib import Path
 from typing import Optional
 
@@ -22,21 +23,24 @@ from ..context.budget import Budget
 from ..context.prompt_loader import load_system_prompt
 from ..core.config import ProjectConfig, load_project_config
 from ..core.hooks import load_hooks
+from ..core.registry import ComponentRegistry
 from ..memory.compressor import ContextCompressor
 from ..memory.longterm import LongTermMemory
 from ..memory.session_store import SessionStore
-from ..models.openai_provider import OpenAIProvider
+from ..models.provider import BaseModelProvider
+from ..observability.trace import JsonlTraceWriter, TraceWriter
 from ..runtime.engine import RuntimeEngine
 from ..tools.levels import PermissionLevel
 from ..tools.loader import ToolLoader
-from ..tools.permission import PermissionGate
 from ..tools.registry import ToolRegistry
 
 router = APIRouter(prefix="/api")
 
-# 引擎容器：session_id -> RuntimeEngine（含其全部依赖）。单进程内存态；消息/审批/工具权限已持久化。
-# 注：权限覆盖在 PermissionGate.effective_level() 每次决策时实时读取 DB，无需重建引擎。
-_engines: dict[str, RuntimeEngine] = {}
+# 引擎缓存（LRU）：session_id -> RuntimeEngine。
+# 消息 / 审批 / 工具权限 / 长期记忆全部持久化在 SQLite，所以缓存未命中时直接重建即可；
+# 引擎内的内存态（已批准 call_id、approve_always 的"记住同类"指纹）会随淘汰失效。
+_ENGINE_CACHE_SIZE = 16
+_engines: "OrderedDict[str, RuntimeEngine]" = OrderedDict()
 _lock = asyncio.Lock()
 _db = None          # 延迟初始化
 _longterm = None
@@ -78,21 +82,15 @@ def get_longterm() -> LongTermMemory:
 # 组装层：配置 -> 组件。此处只允许出现"构造 + 注入"，不允许出现任何领域判断。
 # ----------------------------------------------------------------------
 def _build_database(cfg: ProjectConfig):
-    """TODO(P1-1): 改为 ComponentRegistry.build("memory", cfg.memory["type"], ...)。"""
-    memory_type = cfg.memory["type"]
-    if memory_type != "sqlite":
-        raise ValueError(f"未知记忆后端类型: {memory_type}（当前仅支持 sqlite）")
-    from ..persistence.database import Database
-    return Database(cfg.memory["path"])
+    """记忆后端：由组件注册表按 type 反射构造（sqlite / ...）。"""
+    return ComponentRegistry.build("memory", cfg.memory["type"], path=cfg.memory["path"])
 
 
-def _build_provider(cfg: ProjectConfig, budget: Budget) -> OpenAIProvider:
-    """TODO(P1-1): 改为 ComponentRegistry.build("provider", cfg.provider["type"], ...)。"""
-    provider_type = cfg.provider["type"]
-    if provider_type != "openai":
-        raise ValueError(f"未知模型供应商类型: {provider_type}（当前仅支持 openai）")
+def _build_provider(cfg: ProjectConfig, budget: Budget) -> BaseModelProvider:
+    """模型供应商：由组件注册表按 type 反射构造（openai / ...）。"""
     p = cfg.provider
-    return OpenAIProvider(
+    return ComponentRegistry.build(
+        "provider", p["type"],
         model=p["model"],
         api_key=p["api_key"],
         base_url=p["base_url"],
@@ -101,6 +99,15 @@ def _build_provider(cfg: ProjectConfig, budget: Budget) -> OpenAIProvider:
         request_timeout=float(p["request_timeout"]),
         cache_stats=budget,
     )
+
+
+def _build_trace_writer() -> TraceWriter | None:
+    """Trace 落盘（P1-4）：环境变量 HARNESS_TRACE_PATH 有值才启用。
+
+    追踪输出路径属于部署/运维关切，故放在环境变量层而不是项目 YAML。
+    """
+    path = (os.getenv("HARNESS_TRACE_PATH") or "").strip()
+    return JsonlTraceWriter(path) if path else None
 
 
 def _allowed_paths(cfg: ProjectConfig) -> list[str]:
@@ -128,8 +135,9 @@ def build_engine(session_id: str, cfg: ProjectConfig) -> RuntimeEngine:
     provider = _build_provider(cfg, budget)
     store = SessionStore(db, session_id)
     registry = _build_registry(cfg, session_id)
-    gate = PermissionGate(
-        registry,
+    gate = ComponentRegistry.build(
+        "gate", str(cfg.permission.get("type") or "interactive"),
+        registry=registry,
         approval_store=db if cfg.permission.get("approval_store", True) else None,
     )
     compressor = ContextCompressor(db, provider, keep_recent=int(cfg.compressor["keep_recent"]))
@@ -140,14 +148,32 @@ def build_engine(session_id: str, cfg: ProjectConfig) -> RuntimeEngine:
         system_prompt=load_system_prompt(cfg),
         max_turns=cfg.max_turns, tool_timeout=cfg.tool_timeout,
         hook_chain=load_hooks(cfg.hooks),
+        trace_writer=_build_trace_writer(),
     )
 
 
+def _evict_engine(engine: RuntimeEngine | None) -> None:
+    """淘汰前刷 trace，避免观测数据留在缓冲区里丢掉。"""
+    if engine is None or engine.trace_writer is None:
+        return
+    try:
+        engine.trace_writer.flush()
+    except Exception:  # noqa: BLE001 —— 观测链路故障不影响主流程
+        pass
+
+
 async def get_engine(session_id: str) -> RuntimeEngine:
+    """取引擎：先查 LRU 缓存，未命中则按当前项目配置重建。"""
     async with _lock:
-        if session_id not in _engines:
-            _engines[session_id] = build_engine(session_id, get_project_config())
-        return _engines[session_id]
+        cached = _engines.get(session_id)
+        if cached is not None:
+            _engines.move_to_end(session_id)
+            return cached
+        engine = build_engine(session_id, get_project_config())
+        _engines[session_id] = engine
+        while len(_engines) > _ENGINE_CACHE_SIZE:
+            _evict_engine(_engines.popitem(last=False)[1])
+        return engine
 
 
 def sse_stream(engine: RuntimeEngine, agen) -> StreamingResponse:
@@ -205,7 +231,7 @@ async def list_sessions():
 async def delete_session(session_id: str):
     _get_db().delete_session(session_id)
     async with _lock:
-        _engines.pop(session_id, None)
+        _evict_engine(_engines.pop(session_id, None))
     return {"deleted": session_id}
 
 

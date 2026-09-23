@@ -17,11 +17,13 @@ import time
 from typing import TYPE_CHECKING
 
 from .levels import Decision, PermissionLevel
+from ..core.registry import register_gate
 
 if TYPE_CHECKING:
     from .registry import ToolRegistry
 
 
+@register_gate("interactive")
 class PermissionGate:
     def __init__(self, registry: "ToolRegistry", approval_store=None):
         """approval_store: persistence.Database，可注入以持久化批准记录（重启生效）。"""

@@ -28,6 +28,7 @@ from ..memory.compressor import ContextCompressor
 from ..memory.longterm import LongTermMemory
 from ..memory.session_store import SessionStore
 from ..models.provider import BaseModelProvider
+from ..observability.trace import TraceWriter
 from ..tools.permission import Decision
 from ..tools.registry import ToolRegistry
 
@@ -47,6 +48,7 @@ class RuntimeEngine:
         max_turns: int = 10,
         tool_timeout: float = 30.0,
         hook_chain: HookChain | None = None,  # 为空即全 no-op，等价于"没有钩子"
+        trace_writer: TraceWriter | None = None,  # 为空则不落 trace（P1-4）
     ):
         self.provider = provider
         self.tools = registry
@@ -60,9 +62,25 @@ class RuntimeEngine:
         self.max_turns = max_turns
         self.tool_timeout = tool_timeout
         self.hooks = hook_chain or HookChain()
+        self.trace_writer = trace_writer
 
     # ------------------------------------------------------------------
     async def run(self, user_input: str | None = None) -> AsyncIterator[Event]:
+        """对外唯一入口：产出 `_run_impl` 的全部事件，并顺带写入 trace（如启用）。"""
+        async for event in self._run_impl(user_input):
+            self._trace(event)
+            yield event
+
+    def _trace(self, event: Event) -> None:
+        """观测链路故障不得影响业务：写失败即忽略。"""
+        if self.trace_writer is None:
+            return
+        try:
+            self.trace_writer.write(event)
+        except Exception:  # noqa: BLE001
+            pass
+
+    async def _run_impl(self, user_input: str | None = None) -> AsyncIterator[Event]:
         sid = self.store.session_id
         yield ev(EventType.RUN_STARTED, sid)
 
