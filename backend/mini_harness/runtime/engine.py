@@ -11,6 +11,7 @@
 - 状态全在 SessionStore（SQLite），挂起/恢复/崩溃恢复都靠它
 - 对外只发类型化 Event；ASK 时立即挂起，绝不带着未决审批继续调模型
 - system_prompt 由组装层注入（context.prompt_loader），引擎内不含任何领域提示词
+- 横切关注（输入过滤 / 结果清洗 / 埋点）走 HookChain 的五个点位，引擎自身不含策略判断
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from typing import AsyncIterator
 from ..context.assembler import ContextAssembler
 from ..context.budget import Budget, estimate_tokens
 from ..core.events import EventType, Event, ev
+from ..core.hooks import HookChain
 from ..core.message import Role, ToolCall
 from ..memory.compressor import ContextCompressor
 from ..memory.longterm import LongTermMemory
@@ -28,6 +30,7 @@ from ..memory.session_store import SessionStore
 from ..models.provider import BaseModelProvider
 from ..tools.permission import Decision
 from ..tools.registry import ToolRegistry
+
 
 class RuntimeEngine:
     def __init__(
@@ -43,6 +46,7 @@ class RuntimeEngine:
         longterm: LongTermMemory | None = None,
         max_turns: int = 10,
         tool_timeout: float = 30.0,
+        hook_chain: HookChain | None = None,  # 为空即全 no-op，等价于"没有钩子"
     ):
         self.provider = provider
         self.tools = registry
@@ -55,6 +59,7 @@ class RuntimeEngine:
         self.system_prompt = system_prompt
         self.max_turns = max_turns
         self.tool_timeout = tool_timeout
+        self.hooks = hook_chain or HookChain()
 
     # ------------------------------------------------------------------
     async def run(self, user_input: str | None = None) -> AsyncIterator[Event]:
@@ -95,26 +100,43 @@ class RuntimeEngine:
                 self.budget.account_compression()
                 yield ev(EventType.CONTEXT_COMPRESSED, sid, **info)
 
-            # ---- 3. 组装 + 流式调用 ----
+            # ---- 3. 组装 + 钩子改写 + 流式调用 ----
             ctx = self.assembler.assemble(
                 self.store, self.budget, system_prompt=self.system_prompt,
                 recall_query=self._last_user_text(),
             )
+            messages, tool_schemas = await self.hooks.before_llm_call(
+                ctx.messages, self.tools.schemas() or None
+            )
+            async for he in self._emit_hook_errors(sid):
+                yield he
+
             final = None
             try:
-                async for chunk in self.provider.chat_stream(ctx.messages, tools=self.tools.schemas() or None):
+                async for chunk in self.provider.chat_stream(messages, tools=tool_schemas):
                     if "delta" in chunk:
                         yield ev(EventType.DELTA, sid, text=chunk["delta"])
                     else:
                         final = chunk.get("response")
             except Exception as e:  # noqa: BLE001 —— 模型异常转 Error 事件，不崩引擎
+                await self.hooks.on_error(e)
+                async for he in self._emit_hook_errors(sid):
+                    yield he
                 yield ev(EventType.ERROR, sid, message=f"模型调用失败: {e}")
                 yield ev(EventType.RUN_FINISHED, sid, usage=self.budget.snapshot())
                 return
 
             if final is None:
-                yield ev(EventType.ERROR, sid, message="模型流式响应未返回最终结果")
+                err = RuntimeError("模型流式响应未返回最终结果")
+                await self.hooks.on_error(err)
+                async for he in self._emit_hook_errors(sid):
+                    yield he
+                yield ev(EventType.ERROR, sid, message=str(err))
                 break
+
+            final = await self.hooks.after_llm_call(final)
+            async for he in self._emit_hook_errors(sid):
+                yield he
 
             if final.tool_calls:
                 self.store.add_assistant_with_tool_calls(
@@ -146,13 +168,24 @@ class RuntimeEngine:
         return out
 
     async def _execute_pending(self, tc: ToolCall, sid: str) -> AsyncIterator[Event]:
-        """已批准 / 无需审批的 pending：校验 -> 执行 -> 回填。唯一执行入口。"""
+        """已批准 / 无需审批的 pending：校验 -> 钩子 -> 权限 -> 执行 -> 清洗 -> 回填。唯一执行入口。"""
         # 1) Schema + 路径校验（执行链路强制第一步）
         ok, msg = self.tools.validate_and_check(tc.tool_name, tc.arguments)
         if not ok:
             self.store.add_tool_result(tc.call_id, f"[INVALID] {msg}")
             yield ev(EventType.TOOL_EXECUTED, sid, tool=tc.tool_name, call_id=tc.call_id,
                      ok=False, result=msg[:500], invalid=True)
+            return
+
+        # 2) 钩子前置：放在权限裁决之前，危险调用可被拦在审批弹窗之外
+        allowed, reason = await self.hooks.before_tool_execute(tc.tool_name, tc.arguments)
+        async for he in self._emit_hook_errors(sid):
+            yield he
+        if not allowed:
+            blocked = reason or "被钩子拦截"
+            self.store.add_tool_result(tc.call_id, f"[HOOK_BLOCKED] {blocked}")
+            yield ev(EventType.TOOL_EXECUTED, sid, tool=tc.tool_name, call_id=tc.call_id,
+                     ok=False, result="hook_blocked", reason=blocked, hook_blocked=True)
             return
 
         decision = self.gate.decide(tc.tool_name, tc.call_id, tc.arguments)
@@ -173,13 +206,22 @@ class RuntimeEngine:
         if decision == Decision.ALLOW_NOTIFY:
             yield ev(EventType.DELTA, sid, text=f"[自动执行] {tc.tool_name}\n")
 
-        # 2) 沙箱执行（线程池 + 超时）
+        # 3) 沙箱执行（线程池 + 超时）+ 钩子后置（结果清洗，清洗后的结果才进账本）
         start = time.perf_counter()
         ok, result, elapsed = self.gate.execute(tc.tool_name, tc.arguments, timeout_seconds=self.tool_timeout)
+        result = str(await self.hooks.after_tool_execute(tc.tool_name, tc.arguments, result))
+        async for he in self._emit_hook_errors(sid):
+            yield he
         self.budget.account_tool()
         self.store.add_tool_result(tc.call_id, result)
         yield ev(EventType.TOOL_EXECUTED, sid, tool=tc.tool_name, call_id=tc.call_id,
                  ok=ok, result=result[:500], elapsed_ms=int(elapsed * 1000))
+
+    # ------------------------------------------------------------------
+    async def _emit_hook_errors(self, sid: str) -> AsyncIterator[Event]:
+        """钩子自身执行失败：转成 error 事件下发，主流程继续。"""
+        for msg in self.hooks.drain_errors():
+            yield ev(EventType.ERROR, sid, message=f"钩子执行失败: {msg}", hook_error=True)
 
     # ------------------------------------------------------------------
     def _last_user_text(self) -> str:

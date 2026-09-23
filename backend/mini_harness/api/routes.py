@@ -21,6 +21,7 @@ from ..context.assembler import ContextAssembler
 from ..context.budget import Budget
 from ..context.prompt_loader import load_system_prompt
 from ..core.config import ProjectConfig, load_project_config
+from ..core.hooks import load_hooks
 from ..memory.compressor import ContextCompressor
 from ..memory.longterm import LongTermMemory
 from ..memory.session_store import SessionStore
@@ -138,6 +139,7 @@ def build_engine(session_id: str, cfg: ProjectConfig) -> RuntimeEngine:
         compressor=compressor, assembler=assembler, longterm=get_longterm(),
         system_prompt=load_system_prompt(cfg),
         max_turns=cfg.max_turns, tool_timeout=cfg.tool_timeout,
+        hook_chain=load_hooks(cfg.hooks),
     )
 
 
