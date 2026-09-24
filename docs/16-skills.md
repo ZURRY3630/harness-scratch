@@ -71,7 +71,7 @@ skills:
   max_output_bytes: 20000   # 输出截断上限
 ```
 
-启用技能还要在 `tools.builtin` 里加上三个技能工具名（未加时启动日志会给出提示）：
+启用技能还要在 `tools.builtin` 里加上三个技能工具名（漏加时模型只看到索引、调不动技能，会话日志会 WARNING 提示）：
 
 ```yaml
 tools:
@@ -188,12 +188,12 @@ skills:
 1. **安装**：界面「技能」页签上传 zip / 填 URL 安装，或 `python -m mini_harness.skills install <目录|zip|--url https://...>`。
 2. **配置凭证**：列表里的「缺凭证」提示要配的环境变量；写进仓库根 `.env`（例：`SHOWAPI_APP_KEY=xxx`）。
 3. **启用**：界面直接勾选（立即生效）；或写进项目 `config.yaml` 的 `skills.enabled`（重启生效）。
-4. **注册技能工具**：把 `list_skills / read_skill / run_skill_script` 加进 `tools.builtin`（未加时启动日志会 WARNING 提示）。
+4. **注册技能工具**：把 `list_skills / read_skill / run_skill_script` 加进 `tools.builtin`（漏加时模型会答"技能不可用"，会话日志有 WARNING）。
 5. **调权限**（可选）：`run_skill_script` 默认 `ask_first`；已充分信任的技能可用 `PUT /api/tools/run_skill_script/permission` 放开。
 
 ## 常见错误
 
-- **模型说"没有这个技能"** → 三种原因：slug 拼错；未启用（界面未勾选且不在 `skills.enabled`）；未把技能工具加进 `tools.builtin`（启动日志会有 WARNING 提示）。
+- **模型说"没有这个技能"/"技能不可用"** → 四种原因：slug 拼错；未启用（界面未勾选且不在 `skills.enabled`）；未把技能工具加进 `tools.builtin`（会话日志会有 WARNING 提示）；凭证没配（模型读到"缺少凭证"会主动放弃）。
 - **`[MISSING_CREDENTIAL]`** → 技能需要的环境变量没配。按提示把变量名写进仓库根 `.env` 后**重启进程**（环境变量在启动时载入）。
 - **`[FORBIDDEN_CREDENTIAL]`** → 技能脚本试图读取 `LLM_API_KEY` 之类的宿主密钥。这是策略性拒绝：模型密钥不会下发给技能进程，请让技能使用自有凭证。
 - **`[TIMEOUT]`** → 脚本执行超过 `skills.timeout`（默认取 `EXECUTION_TIMEOUT_SECONDS`）。长任务请让技能自己分两步（提交任务 + 轮询查询）。

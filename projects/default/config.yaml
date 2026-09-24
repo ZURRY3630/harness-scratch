@@ -19,6 +19,10 @@ tools:
     - simulate_delete_file
     - memory_save
     - memory_search
+    # 技能三件套：不在白名单里，界面上勾选了技能模型也用不了（只看到索引，调不动）
+    - list_skills
+    - read_skill
+    - run_skill_script
   plugins_dir: tools
 
 permission:
