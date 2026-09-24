@@ -4,6 +4,38 @@
 
 版本号的唯一来源是 `pyproject.toml`，`mini_harness.__version__` 与之保持同步，`GET /api/health` 返回同一个值。
 
+## v0.5.0 (2026-09-24)
+
+主题：可观测性落地 —— 结构化日志、调用链 span、指标与阈值告警。
+
+### 破坏性变更
+
+无。本次全部是新增能力，`RuntimeEngine.__init__` 只新增可选参数。
+
+### 新增（不影响既有代码）
+
+- `observability/logging.py`：`setup_logging` / `get_logger` / `StructuredLogger` /
+  `set_trace_context` / `reset_trace_context` / `current_trace_id` / `log_format`
+- `observability/spans.py`：`Tracer` / `Span` / `SpanSink` / `NullSpanSink` / `InMemorySpanSink` / `SPANS`
+- `observability/metrics.py`：`MetricsRegistry` / `METRICS` / `AlertEvaluator` / `AlertThresholds` / `Alert`
+- `RuntimeEngine.__init__` 新增可选参数 `tracer`、`metrics`；新增公开方法 `flush_trace()`
+- `GET /api/metrics`（指标快照 + 告警）、`GET /api/traces`（最近 span，环形缓冲）
+- 环境变量：`HARNESS_LOG_FORMAT`、`HARNESS_ALERT_ERROR_RATE_CRITICAL`、
+  `HARNESS_ALERT_ERROR_RATE_WARNING`、`HARNESS_ALERT_LLM_LATENCY_P99_MS`、
+  `HARNESS_ALERT_TOOL_FAILURE_RATE`、`HARNESS_ALERT_MIN_SAMPLES`
+- `main.py` 改用 FastAPI lifespan：启动初始化日志，退出刷观测缓冲
+
+### 行为变化
+
+- **内核开始输出日志**（此前内核零日志）。默认 `text` 格式、级别取 `LOG_LEVEL`；
+  生产建议 `HARNESS_LOG_FORMAT=json`。日志只接管 `mini_harness.*`，不影响宿主 root logger。
+- `engine.run()` 每次收尾会 `flush()` 事件与 span 缓冲（此前只在引擎被淘汰时刷盘）。
+- `JsonlTraceWriter` 现在同时是 `SpanSink`；JSONL 记录新增 `kind` 字段区分 `event` / `span`。
+  `Event.to_trace_dict()` 本身未变，`kind` 由 writer 附加。
+- 审批决策（批准/拒绝）新增指标 `approvals_decided_total`，同时打一条结构化日志。
+
+---
+
 ## v0.4.0 (2026-09-23)
 
 主题：框架化改造 —— 内核与领域分离，扩展点成型。

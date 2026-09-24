@@ -7,17 +7,37 @@
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
+from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
-from .api.routes import get_project_config, router
+from .api.routes import flush_observability, get_project_config, router
 from .core.config import get_config
+from .observability import get_logger, setup_logging
+from .observability.logging import log_format
 
-app = FastAPI(title="MiniHarness API", version=__version__)
+log = get_logger(__name__)
+
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """启动：初始化内核日志；退出：把观测缓冲刷盘，避免丢尾部 trace。"""
+    setup_logging()
+    log.info("内核启动", version=__version__, project=get_project_config().name,
+             log_format=log_format())
+    try:
+        yield
+    finally:
+        flush_observability()
+        log.info("内核退出，观测缓冲已刷盘")
+
+
+app = FastAPI(title="MiniHarness API", version=__version__, lifespan=lifespan)
 
 cfg = get_config()
 app.add_middleware(

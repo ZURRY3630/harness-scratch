@@ -1,4 +1,4 @@
-# MiniHarness v0.4
+# MiniHarness v0.5.0
 
 最小但生产向的 Agent Harness：FastAPI + Vue 3 (Vite/npm) 前后端分离 + 上下文压缩 / 长期记忆 / Prompt 缓存 / Token 预算。
 
@@ -42,7 +42,7 @@ backend/mini_harness/   框架本体（通用内核，不含任何领域逻辑�
 ├── tools/          registry(Schema+路径校验) · permission(五级权限) · levels · loader(装载器) · builtin/(通用工具)
 ├── sdk/            decorator.py（插件作者唯一契约：@tool）
 ├── runtime/        engine(Agent Loop，唯一执行入口)
-├── observability/  trace.py(TraceWriter 落盘接口)
+├── observability/  logging(结构化日志+trace_id) · spans(Tracer) · metrics(指标+告警) · trace(落盘接口)
 ├── eval/           runner.py(TestCase/EvalResult/EvalRunner 占位)
 └── api/            routes(FastAPI + SSE + 组装层 build_engine)
 projects/               领域项目：换项目 = 换/加一个目录，内核零改动
@@ -107,7 +107,10 @@ projects/coding_agent/
 `RESERVE_OUTPUT_TOKENS`（4096）、`COMPRESS_THRESHOLD`（0.8）、`KEEP_RECENT_MESSAGES`（8）
 **存储**：`MEMORY_DB_PATH`（data/harness.db）、`LONGTERM_TOP_K`（3）
 **运维**：`HARNESS_ALLOWED_PATHS`（覆盖 YAML 的 `permission.allowed_paths`，逗号/分号分隔）、
-`HARNESS_TRACE_PATH`（设置即启用 JSONL 事件落盘）、`LOG_LEVEL`、`CORS_ORIGINS`
+`LOG_LEVEL`、`CORS_ORIGINS`
+**可观测性**：`HARNESS_LOG_FORMAT`（`text` / `json`，生产用 json）、`HARNESS_TRACE_PATH`（设置即落 JSONL 事件+调用链）、
+`HARNESS_ALERT_ERROR_RATE_CRITICAL`（0.05）、`HARNESS_ALERT_ERROR_RATE_WARNING`（0.01）、
+`HARNESS_ALERT_LLM_LATENCY_P99_MS`（5000）、`HARNESS_ALERT_TOOL_FAILURE_RATE`（0.20）、`HARNESS_ALERT_MIN_SAMPLES`（20）
 
 > 注意：对应项在 YAML 里写了具体值时，YAML 优先；只有 YAML 留 `null`/省略才读环境变量。
 
@@ -121,7 +124,9 @@ projects/coding_agent/
 - `GET /api/tools` — 工具列表（default/effective/override/path_guard）
 - `PUT /api/tools/{name}/permission` `{permission}` — 修改权限（运行时覆盖，持久化，立即生效）
 - `DELETE /api/tools/{name}/permission` — 清除覆盖，回到声明默认
-- `GET /api/health`
+- `GET /api/metrics` — 指标快照（counters / histograms / gauges）+ 当前告警（拉取式，5 分钟去重）
+- `GET /api/traces?session_id=&limit=` — 最近调用链 span（进程内环形缓冲，倒序）
+- `GET /api/health` — 健康检查 + 当前项目 `agent_name`
 
 ## 工具权限管理
 

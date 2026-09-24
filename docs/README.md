@@ -1,15 +1,10 @@
 # 文档索引
 
-| 文档 | 对应版本 | 最后更新 |
-|---|---|---|
-| README.md | v0.4.0 | 2026-09-23 |
-| 01-quickstart.md | v0.4.0 | 2026-09-23 |
-| 02-concepts.md | v0.4.0 | 2026-09-23 |
-| contracts.md | v0.4.0 | 2026-09-23 |
-| 03-architecture.md | v0.4.0 | 2026-09-23 |
-| 04-extension-points.md | v0.4.0 | 2026-09-23 |
-| 05-build-a-project.md | v0.4.0 | 2026-09-23 |
-| 06-15、appendix/* | v0.4.0 | 2026-09-23 |
+| 文档 | 对应版本 | 最后更新 | 状态 |
+|---|---|---|---|
+| README.md / 01 / 02 / contracts / 03 / 04 / 05 | v0.5.0 | 2026-09-24 | 已完成 |
+| 12-observability.md | v0.5.0 | 2026-09-24 | 已完成 |
+| 06~11、13~15、appendix/* | v0.5.0 | 2026-09-24 | 占位，待后续轮次补齐 |
 
 ---
 
@@ -77,6 +72,7 @@ asyncio.run(main())
 | [03-architecture.md](03-architecture.md) | 三层架构与数据流 |
 | [04-extension-points.md](04-extension-points.md) | 扩展点索引表：想改 X 该看哪篇 |
 | [05-build-a-project.md](05-build-a-project.md) | 完整案例：0 到 1 做一个客服助手项目 |
+| [12-observability.md](12-observability.md) | 接日志 / Trace / 指标：三件套的接口、指标清单与告警阈值 |
 
 ## License / 贡献
 

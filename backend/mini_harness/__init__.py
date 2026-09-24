@@ -12,4 +12,4 @@
     api          FastAPI 路由 + SSE 流式接口
 """
 
-__version__ = "0.4.0"  # 与 pyproject.toml 保持一致；接口变更需记入 docs/appendix/migration.md
+__version__ = "0.5.0"  # 与 pyproject.toml 保持一致；接口变更需记入 docs/appendix/migration.md

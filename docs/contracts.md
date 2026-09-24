@@ -218,4 +218,27 @@ def write(self, event: Event) -> None   # 只做序列化与缓冲，不阻塞�
 def flush(self) -> None                 # 刷盘
 ```
 
+**可观测性**（`mini_harness.observability`）
+
+```python
+setup_logging(level=None, fmt=None) -> None        # 只接管 mini_harness.* 命名空间
+get_logger(name) -> StructuredLogger               # .debug/.info/.warning/.error/.exception(msg, **fields)
+set_trace_context(trace_id, session_id) -> tokens  # 与 reset_trace_context(tokens) 成对使用
+
+Tracer(sinks: list[SpanSink]) -> Tracer
+  .start(name, *, session_id="", trace_id="", **attributes) -> Span
+  .finish(span, status="ok", **attributes) -> Span
+  .attach(span) -> Token / .detach(token) / .flush() / .span(name, ...) 上下文管理器
+SpanSink.emit(span: Span) -> None / .flush() -> None
+
+MetricsRegistry(max_samples=1000)
+  .incr(name, value=1.0, **labels) / .observe(name, value, **labels) / .set_gauge(name, value)
+  .counter(name, **labels) / .sum_counters(name) / .sum_counters_with_label(name, label, value)
+  .percentile(name, q, **labels) / .snapshot() / .reset()
+AlertEvaluator(registry, thresholds=None).evaluate(now=None) -> list[Alert]
+```
+
+`RuntimeEngine` 的观测注入点为可选参数 `tracer` / `metrics`，另有公开方法 `flush_trace()`。
+指标清单、阈值与启用方式见 [12-observability.md](12-observability.md)。
+
 **评估**（`mini_harness.eval.runner`）：`TestCase` / `EvalResult` / `EvalRunner` 的字段与方法签名见 [13-evaluation.md](13-evaluation.md)。

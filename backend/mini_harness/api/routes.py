@@ -29,6 +29,9 @@ from ..memory.compressor import ContextCompressor
 from ..memory.longterm import LongTermMemory
 from ..memory.session_store import SessionStore
 from ..models.provider import BaseModelProvider
+from ..observability import METRICS, SPANS, AlertEvaluator, Tracer
+from ..observability.logging import get_logger
+from ..observability.spans import SpanSink
 from ..observability.trace import JsonlTraceWriter, TraceWriter
 from ..runtime.engine import RuntimeEngine
 from ..tools.levels import PermissionLevel
@@ -36,6 +39,8 @@ from ..tools.loader import ToolLoader
 from ..tools.registry import ToolRegistry
 
 router = APIRouter(prefix="/api")
+
+log = get_logger(__name__)
 
 # 引擎缓存（LRU）：session_id -> RuntimeEngine。
 # 消息 / 审批 / 工具权限 / 长期记忆全部持久化在 SQLite，所以缓存未命中时直接重建即可；
@@ -111,6 +116,14 @@ def _build_trace_writer() -> TraceWriter | None:
     return JsonlTraceWriter(path) if path else None
 
 
+def _build_tracer(trace_writer: TraceWriter | None) -> Tracer:
+    """span 落点：进程内环形缓冲（供 `GET /api/traces`）+ 可选的 JSONL 落盘。"""
+    sinks: list = [SPANS]
+    if isinstance(trace_writer, SpanSink):
+        sinks.append(trace_writer)
+    return Tracer(sinks)
+
+
 def _allowed_paths(cfg: ProjectConfig) -> list[str]:
     """工具路径边界；环境变量 HARNESS_ALLOWED_PATHS（逗号/分号分隔）优先。"""
     raw = (os.getenv("HARNESS_ALLOWED_PATHS") or "").strip()
@@ -143,24 +156,35 @@ def build_engine(session_id: str, cfg: ProjectConfig) -> RuntimeEngine:
     )
     compressor = ContextCompressor(db, provider, keep_recent=int(cfg.compressor["keep_recent"]))
     assembler = ContextAssembler(get_longterm())
+    trace_writer = _build_trace_writer()
     return RuntimeEngine(
         provider=provider, registry=registry, store=store, gate=gate, budget=budget,
         compressor=compressor, assembler=assembler, longterm=get_longterm(),
         system_prompt=load_system_prompt(cfg),
         max_turns=cfg.max_turns, tool_timeout=cfg.tool_timeout,
         hook_chain=load_hooks(cfg.hooks),
-        trace_writer=_build_trace_writer(),
+        trace_writer=trace_writer,
+        tracer=_build_tracer(trace_writer),
+        metrics=METRICS,
     )
 
 
-def _evict_engine(engine: RuntimeEngine | None) -> None:
-    """淘汰前刷 trace，避免观测数据留在缓冲区里丢掉。"""
-    if engine is None or engine.trace_writer is None:
+def _flush_engine(engine: RuntimeEngine | None) -> None:
+    """刷观测缓冲，避免 trace 留在内存里丢掉。"""
+    if engine is None:
         return
-    try:
-        engine.trace_writer.flush()
-    except Exception:  # noqa: BLE001 —— 观测链路故障不影响主流程
-        pass
+    engine.flush_trace()
+
+
+def _evict_engine(engine: RuntimeEngine | None) -> None:
+    """淘汰一个引擎：先刷盘，再交给 GC。"""
+    _flush_engine(engine)
+
+
+def flush_observability() -> None:
+    """进程退出前统一刷盘（main.py 的 lifespan 调用）。"""
+    for engine in list(_engines.values()):
+        _flush_engine(engine)
 
 
 async def get_engine(session_id: str) -> RuntimeEngine:
@@ -265,6 +289,8 @@ async def approval(req: ApprovalRequest):
         engine.gate.approve(req.call_id, remember=req.remember)
     else:
         engine.gate.deny(req.call_id)
+    METRICS.incr("approvals_decided_total", decision=req.decision)
+    log.info("审批决策", call_id=req.call_id, decision=req.decision, remember=req.remember)
     return sse_stream(engine, engine.resume())
 
 
@@ -359,6 +385,29 @@ async def create_memory(req: MemoryCreate):
 async def delete_memory(memory_id: str):
     get_longterm().delete(memory_id)
     return {"deleted": memory_id}
+
+
+# ---------- 可观测性 ----------
+# 告警为**拉取式**：每次查询指标时按阈值评估（同一告警 5 分钟内只报一次），
+# 监控系统轮询 /api/metrics 即可拿到；不做主动推送。
+_alerts = AlertEvaluator(METRICS)
+
+
+@router.get("/metrics")
+async def metrics():
+    """指标快照（计数器 / 直方图 / 即时量）+ 当前告警。"""
+    METRICS.set_gauge("engine_cache_size", len(_engines))
+    alerts = _alerts.evaluate()
+    for alert in alerts:
+        log.warning("告警触发", alert=alert.name, level=alert.level,
+                    value=alert.value, threshold=alert.threshold)
+    return {**METRICS.snapshot(), "alerts": [a.to_dict() for a in alerts]}
+
+
+@router.get("/traces")
+async def traces(session_id: Optional[str] = None, limit: int = 50):
+    """最近调用链 span（进程内环形缓冲，按时间倒序）。"""
+    return {"spans": SPANS.recent(limit=max(1, min(limit, 500)), session_id=session_id or "")}
 
 
 # ---------- 静态前端 ----------
