@@ -12,7 +12,8 @@
 | 调预算（上下文上限、压缩阈值、轮次、超时） | 编辑 YAML 的 `budget` / `max_turns` / `tool_timeout` | [06](06-configure.md) | ⭐ |
 | 限制工具能操作的目录 | 编辑 YAML 的 `permission.allowed_paths` | [06](06-configure.md) | ⭐ |
 | 调工具权限级别（全自动/逐次审批/转人工） | 工具声明的 `permission` 或运行时 `PUT /api/tools/{name}/permission` | [06](06-configure.md) | ⭐ |
-| 加一个领域工具 | 写 `@tool` 函数放进 `projects/<name>/tools/` | [07](07-custom-tools.md) | ⭐ |
+| 加领域工具 | 写 `@tool` 函数放进 `projects/<name>/tools/` | [07](07-custom-tools.md) | ⭐ |
+| 安装/创建一个技能（文档 + CLI 脚本） | 放技能包 + 配 `skills.enabled` | [16](16-skills.md) | ⭐ |
 | 加输入过滤 / 结果清洗 / 埋点 | 写 `HarnessHooks` 子类并填进 `hooks:` | [10](10-custom-hooks.md) | ⭐ |
 | 接日志系统、留事件轨迹 | 写 Hook + 配置 `HARNESS_TRACE_PATH` | [12](12-observability.md) | ⭐ |
 

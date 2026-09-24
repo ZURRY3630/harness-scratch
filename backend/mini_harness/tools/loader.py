@@ -19,12 +19,15 @@ import inspect
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, Protocol
 
 from ..memory.longterm import LongTermMemory
 from ..sdk.decorator import build_tool, is_tool
 from .builtin import BUILTIN_FACTORIES
 from .registry import Tool, ToolRegistry
+
+if TYPE_CHECKING:
+    from ..skills.runtime import SkillRuntime
 
 
 @dataclass
@@ -33,6 +36,7 @@ class ToolContext:
 
     longterm: Optional[LongTermMemory] = None
     session_id: str = ""
+    skills: Optional["SkillRuntime"] = None   # 技能子系统；项目未启用任何技能时为 None
 
 
 # 内置工具工厂：上下文 -> Tool；返回 None 表示依赖缺失，不注册
@@ -57,9 +61,10 @@ class ToolLoader:
         registry: ToolRegistry,
         longterm: LongTermMemory | None = None,
         session_id: str = "",
+        skills: "SkillRuntime | None" = None,
     ) -> None:
         self.registry = registry
-        self.context = ToolContext(longterm=longterm, session_id=session_id)
+        self.context = ToolContext(longterm=longterm, session_id=session_id, skills=skills)
 
     # ----- 内置工具 -----
     def load_builtin(self, names: list[str]) -> None:

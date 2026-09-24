@@ -4,6 +4,39 @@
 
 版本号的唯一来源是 `pyproject.toml`，`mini_harness.__version__` 与之保持同步，`GET /api/health` 返回同一个值。
 
+## v0.6.0 (2026-09-24)
+
+主题：技能系统 —— 安装/创建可复用的"文档 + CLI 脚本"技能包。
+
+### 破坏性变更
+
+无。`ToolContext` 与 `ToolLoader.__init__` 只新增可选参数 `skills`；`ProjectConfig` 新增 `skills` 字段
+（缺少该字段的旧 YAML 会自动回填默认值）。
+
+### 新增（不影响既有代码）
+
+- `skills/manifest.py`：`SkillManifest` / `parse_skill_md` / `load_manifest` / `slugify` / `slug_from_zip_name`
+- `skills/installer.py`：`SkillInstaller` / `InstallLimits`（zip / URL / 本地目录三种来源）
+- `skills/store.py`：`SkillStore`（列表 / 查询 / 卸载 / 白名单过滤）
+- `skills/runner.py`：`SkillRunner` / `SkillRunResult`（受限子进程执行）
+- `skills/runtime.py`：`SkillRuntime` / `build_skill_runtime`
+- `skills/__main__.py`：`python -m mini_harness.skills {install,list,remove}` CLI
+- 内置工具 `list_skills` / `read_skill` / `run_skill_script`（`tools/builtin/skills.py`）
+- 配置段 `skills.{dir,enabled,timeout,max_output_bytes}`
+- HTTP：`GET /api/skills`、`GET /api/skills/{slug}`、`POST /api/skills/install`、
+  `POST /api/skills/install-url`、`DELETE /api/skills/{slug}`
+- `examples/skills/hello-world/`：技能包格式参考实现
+
+### 行为变化
+
+- 项目启用技能后，**系统提示词尾部会追加技能索引段**（几行，随 `skills.enabled` 变化；
+  因此改启用列表需要重建引擎/重启进程）。
+- 技能脚本在**受限环境**中执行：不继承宿主环境变量、只注入声明/探测到的凭证；
+  宿主模型密钥（`LLM_API_KEY` 等）永不注入，技能要求它们会被直接拒绝。
+- 技能执行超时复用 `EXECUTION_TIMEOUT_SECONDS`（可用 `skills.timeout` 覆盖）。
+
+---
+
 ## v0.5.0 (2026-09-24)
 
 主题：可观测性落地 —— 结构化日志、调用链 span、指标与阈值告警。

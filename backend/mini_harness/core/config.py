@@ -112,6 +112,7 @@ class ProjectConfig:
     assembler: dict[str, Any]
     tools: dict[str, Any]                      # {"builtin": [...], "plugins_dir": "..."}
     permission: dict[str, Any]                 # {"allowed_paths": [...], "approval_store": bool}
+    skills: dict[str, Any]                     # {"dir": ..., "enabled": [...], "timeout": ..., "max_output_bytes": ...}
     hooks: list[str]                           # Hook 类的导入路径（P0-3）
     max_turns: int
     tool_timeout: float
@@ -195,6 +196,7 @@ def load_project_config(path: str, env: Optional[Config] = None) -> ProjectConfi
     compressor_raw = _section(raw, "compressor")
     tools_raw = _section(raw, "tools")
     permission_raw = _section(raw, "permission")
+    skills_raw = _section(raw, "skills")
 
     return ProjectConfig(
         name=str(raw.get("name") or config_path.stem),
@@ -229,6 +231,13 @@ def load_project_config(path: str, env: Optional[Config] = None) -> ProjectConfi
         permission={
             "allowed_paths": [_resolve_path(p, base_dir) for p in (permission_raw.get("allowed_paths") or [])],
             "approval_store": bool(_pick(permission_raw.get("approval_store"), True)),
+        },
+        skills={
+            # 技能安装根目录：默认锚定仓库根（不随进程工作目录漂移）
+            "dir": _resolve_path(skills_raw.get("dir"), base_dir) or str(REPO_ROOT / "data" / "skills"),
+            "enabled": [str(s).strip() for s in (skills_raw.get("enabled") or []) if str(s).strip()],
+            "timeout": float(_pick(skills_raw.get("timeout"), env.tool_timeout_seconds)),
+            "max_output_bytes": int(_pick(skills_raw.get("max_output_bytes"), 20_000)),
         },
         hooks=[str(h) for h in (raw.get("hooks") or [])],
         max_turns=int(_pick(raw.get("max_turns"), env.max_turns)),

@@ -2,9 +2,10 @@
 
 | 文档 | 对应版本 | 最后更新 | 状态 |
 |---|---|---|---|
-| README.md / 01 / 02 / contracts / 03 / 04 / 05 | v0.5.0 | 2026-09-24 | 已完成 |
+| README.md / 01 / 02 / contracts / 03 / 04 / 05 | v0.6.0 | 2026-09-24 | 已完成 |
 | 12-observability.md | v0.5.0 | 2026-09-24 | 已完成 |
-| 06~11、13~15、appendix/* | v0.5.0 | 2026-09-24 | 占位，待后续轮次补齐 |
+| 16-skills.md | v0.6.0 | 2026-09-24 | 已完成 |
+| 06~11、13~15、appendix/* | v0.6.0 | 2026-09-24 | 占位，待后续轮次补齐 |
 
 ---
 
@@ -73,6 +74,7 @@ asyncio.run(main())
 | [04-extension-points.md](04-extension-points.md) | 扩展点索引表：想改 X 该看哪篇 |
 | [05-build-a-project.md](05-build-a-project.md) | 完整案例：0 到 1 做一个客服助手项目 |
 | [12-observability.md](12-observability.md) | 接日志 / Trace / 指标：三件套的接口、指标清单与告警阈值 |
+| [16-skills.md](16-skills.md) | 技能系统：安装/创建技能包、凭证注入规则与调用链路 |
 
 ## License / 贡献
 

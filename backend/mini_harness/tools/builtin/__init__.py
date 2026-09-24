@@ -8,12 +8,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from . import memory, system
+from . import memory, skills, system
 
 if TYPE_CHECKING:
     from ..loader import BuiltinFactory
 
-# 顺序即默认注册顺序：system 在前，记忆工具在后
-BUILTIN_FACTORIES: dict[str, "BuiltinFactory"] = {**system.TOOLS, **memory.TOOLS}
+# 顺序即默认注册顺序：system 在前，记忆工具其次，技能工具最后
+BUILTIN_FACTORIES: dict[str, "BuiltinFactory"] = {**system.TOOLS, **memory.TOOLS, **skills.TOOLS}
 
-__all__ = ["BUILTIN_FACTORIES", "memory", "system"]
+__all__ = ["BUILTIN_FACTORIES", "memory", "skills", "system"]

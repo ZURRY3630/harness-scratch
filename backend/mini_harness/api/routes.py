@@ -15,7 +15,7 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -34,6 +34,10 @@ from ..observability.logging import get_logger
 from ..observability.spans import SpanSink
 from ..observability.trace import JsonlTraceWriter, TraceWriter
 from ..runtime.engine import RuntimeEngine
+from ..skills.installer import SkillInstaller
+from ..skills.manifest import SkillError
+from ..skills.runtime import SkillRuntime, build_skill_runtime
+from ..skills.store import SkillStore
 from ..tools.levels import PermissionLevel
 from ..tools.loader import ToolLoader
 from ..tools.registry import ToolRegistry
@@ -124,6 +128,23 @@ def _build_tracer(trace_writer: TraceWriter | None) -> Tracer:
     return Tracer(sinks)
 
 
+def _build_skill_runtime(cfg: ProjectConfig) -> SkillRuntime:
+    """技能运行时：安装根目录 + 项目启用白名单 + 执行器。"""
+    return build_skill_runtime(
+        cfg.skills["dir"],
+        list(cfg.skills["enabled"]),
+        timeout=float(cfg.skills["timeout"]),
+        max_output_bytes=int(cfg.skills["max_output_bytes"]),
+    )
+
+
+def _compose_system_prompt(cfg: ProjectConfig, skills: SkillRuntime) -> str:
+    """项目提示词 + 已启用技能索引（索引只占几行，正文由 read_skill 按需读取）。"""
+    base = load_system_prompt(cfg)
+    block = skills.index_block()
+    return f"{base}\n\n{block}" if block else base
+
+
 def _allowed_paths(cfg: ProjectConfig) -> list[str]:
     """工具路径边界；环境变量 HARNESS_ALLOWED_PATHS（逗号/分号分隔）优先。"""
     raw = (os.getenv("HARNESS_ALLOWED_PATHS") or "").strip()
@@ -132,9 +153,12 @@ def _allowed_paths(cfg: ProjectConfig) -> list[str]:
     return [p for p in cfg.permission["allowed_paths"] if p]
 
 
-def _build_registry(cfg: ProjectConfig, session_id: str) -> ToolRegistry:
+def _build_registry(cfg: ProjectConfig, session_id: str, skills: SkillRuntime) -> ToolRegistry:
     registry = ToolRegistry(allowed_paths=_allowed_paths(cfg))
-    ToolLoader(registry, get_longterm(), session_id=session_id).load_all(cfg)
+    ToolLoader(registry, get_longterm(), session_id=session_id, skills=skills).load_all(cfg)
+    if skills.enabled and registry.get("run_skill_script") is None:
+        log.warning("已启用技能但未注册技能工具", enabled=skills.enabled,
+                    hint="请在 config.yaml 的 tools.builtin 中加入 list_skills / read_skill / run_skill_script")
     return registry
 
 
@@ -148,7 +172,8 @@ def build_engine(session_id: str, cfg: ProjectConfig) -> RuntimeEngine:
     )
     provider = _build_provider(cfg, budget)
     store = SessionStore(db, session_id)
-    registry = _build_registry(cfg, session_id)
+    skills = _build_skill_runtime(cfg)
+    registry = _build_registry(cfg, session_id, skills)
     gate = ComponentRegistry.build(
         "gate", str(cfg.permission.get("type") or "interactive"),
         registry=registry,
@@ -160,7 +185,7 @@ def build_engine(session_id: str, cfg: ProjectConfig) -> RuntimeEngine:
     return RuntimeEngine(
         provider=provider, registry=registry, store=store, gate=gate, budget=budget,
         compressor=compressor, assembler=assembler, longterm=get_longterm(),
-        system_prompt=load_system_prompt(cfg),
+        system_prompt=_compose_system_prompt(cfg, skills),
         max_turns=cfg.max_turns, tool_timeout=cfg.tool_timeout,
         hook_chain=load_hooks(cfg.hooks),
         trace_writer=trace_writer,
@@ -332,7 +357,8 @@ async def list_tools(session_id: Optional[str] = None):
 
 def _fallback_registry() -> ToolRegistry:
     """无 session 时用临时注册表仅做展示（权限元数据来自工具定义）。"""
-    return _build_registry(get_project_config(), session_id="")
+    cfg = get_project_config()
+    return _build_registry(cfg, session_id="", skills=_build_skill_runtime(cfg))
 
 
 class ToolPermRequest(BaseModel):
@@ -408,6 +434,66 @@ async def metrics():
 async def traces(session_id: Optional[str] = None, limit: int = 50):
     """最近调用链 span（进程内环形缓冲，按时间倒序）。"""
     return {"spans": SPANS.recent(limit=max(1, min(limit, 500)), session_id=session_id or "")}
+
+
+# ---------- 技能（安装 / 列表 / 卸载）----------
+class SkillInstallUrlRequest(BaseModel):
+    url: str
+
+
+def _skill_store() -> SkillStore:
+    return SkillStore(Path(get_project_config().skills["dir"]))
+
+
+@router.get("/skills")
+async def list_skills():
+    """已安装技能清单（含是否在当前项目启用、缺哪些凭证、脚本列表）。"""
+    enabled = set(get_project_config().skills["enabled"])
+    return [{**m.to_dict(), "enabled": m.slug in enabled} for m in _skill_store().list()]
+
+
+@router.get("/skills/{slug}")
+async def get_skill(slug: str):
+    """单个技能详情（含 SKILL.md 正文）。"""
+    manifest = _skill_store().get(slug)
+    if manifest is None:
+        raise HTTPException(404, f"技能不存在: {slug}")
+    return {**manifest.to_dict(with_body=True), "enabled": slug in get_project_config().skills["enabled"]}
+
+
+@router.post("/skills/install")
+async def install_skill(request: Request):
+    """上传 zip 技能包安装：请求体直接是 zip 字节（`Content-Type: application/zip`）。"""
+    data = await request.body()
+    if not data:
+        raise HTTPException(400, "请求体为空，请上传 zip 技能包")
+    try:
+        manifest = SkillInstaller(_skill_store()).install_zip_bytes(data, source="upload")
+    except SkillError as e:
+        raise HTTPException(400, f"技能包不合法: {e}")
+    return {"installed": True, **manifest.to_dict()}
+
+
+@router.post("/skills/install-url")
+async def install_skill_from_url(req: SkillInstallUrlRequest):
+    """从 http(s) 直链下载 zip 技能包并安装。"""
+    try:
+        manifest = SkillInstaller(_skill_store()).install_url(req.url)
+    except SkillError as e:
+        raise HTTPException(400, f"安装失败: {e}")
+    return {"installed": True, **manifest.to_dict()}
+
+
+@router.delete("/skills/{slug}")
+async def uninstall_skill(slug: str):
+    """卸载技能（整目录删除）。"""
+    try:
+        removed = _skill_store().remove(slug)
+    except SkillError as e:
+        raise HTTPException(400, str(e))
+    if not removed:
+        raise HTTPException(404, f"技能不存在: {slug}")
+    return {"deleted": slug}
 
 
 # ---------- 静态前端 ----------

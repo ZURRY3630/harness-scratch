@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mini-harness"
-version = "0.5.0"
+version = "0.6.0"
 description = "A production-oriented agent harness: context compression, long-term memory, prompt caching, token budgeting."
 requires-python = ">=3.10"
 dependencies = [
@@ -30,7 +30,7 @@ packages = [
     "mini_harness.memory", "mini_harness.context", "mini_harness.models",
     "mini_harness.tools", "mini_harness.tools.builtin", "mini_harness.sdk",
     "mini_harness.runtime", "mini_harness.api",
-    "mini_harness.observability", "mini_harness.eval",
+    "mini_harness.observability", "mini_harness.eval", "mini_harness.skills",
 ]
 
 [tool.pytest.ini_options]

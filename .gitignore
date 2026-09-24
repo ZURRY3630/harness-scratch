@@ -20,6 +20,9 @@ __pycache__/
 **/data/*.db-wal
 **/*.trace.jsonl
 
+# --- 技能安装目录（运行时安装，不入库；示例见 examples/skills/）---
+data/skills/
+
 # --- 前端 ---
 frontend/node_modules/
 frontend/dist/

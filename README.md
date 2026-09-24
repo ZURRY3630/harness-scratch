@@ -1,4 +1,4 @@
-# MiniHarness v0.5.0
+# MiniHarness v0.6.0
 
 最小但生产向的 Agent Harness：FastAPI + Vue 3 (Vite/npm) 前后端分离 + 上下文压缩 / 长期记忆 / Prompt 缓存 / Token 预算。
 
@@ -44,9 +44,12 @@ backend/mini_harness/   框架本体（通用内核，不含任何领域逻辑�
 ├── runtime/        engine(Agent Loop，唯一执行入口)
 ├── observability/  logging(结构化日志+trace_id) · spans(Tracer) · metrics(指标+告警) · trace(落盘接口)
 ├── eval/           runner.py(TestCase/EvalResult/EvalRunner 占位)
+├── skills/         manifest · installer · store · runner · runtime · __main__(安装/列出/卸载 CLI)
 └── api/            routes(FastAPI + SSE + 组装层 build_engine)
 projects/               领域项目：换项目 = 换/加一个目录，内核零改动
 └── default/        config.yaml · prompts/system.md · tools/(领域工具) · hooks.py(示例钩子)
+examples/skills/        技能包示例（hello-world：SKILL.md + scripts/greet.py）
+data/skills/            技能安装目录（运行时生成，gitignore）
 configs/                全局默认值 default.yaml + 项目配置模板 example_project.yaml
 frontend/               Vue 3 工程（npm + Vite + SFC）
 ├── src/App.vue         根组件：布局 + SSE 消费状态机 + 跨组件状态
@@ -126,6 +129,10 @@ projects/coding_agent/
 - `DELETE /api/tools/{name}/permission` — 清除覆盖，回到声明默认
 - `GET /api/metrics` — 指标快照（counters / histograms / gauges）+ 当前告警（拉取式，5 分钟去重）
 - `GET /api/traces?session_id=&limit=` — 最近调用链 span（进程内环形缓冲，倒序）
+- `GET /api/skills`、`GET /api/skills/{slug}` — 已安装技能清单 / 详情（含 SKILL.md 正文）
+- `POST /api/skills/install` — 上传 zip 技能包（请求体即 zip 字节）
+- `POST /api/skills/install-url` `{url}` — 从 http(s) 直链安装技能
+- `DELETE /api/skills/{slug}` — 卸载技能
 - `GET /api/health` — 健康检查 + 当前项目 `agent_name`
 
 ## 工具权限管理

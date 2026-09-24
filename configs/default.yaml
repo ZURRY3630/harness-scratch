@@ -59,6 +59,13 @@ permission:
   allowed_paths: []           # 工具路径参数的可写边界；可用环境变量 HARNESS_ALLOWED_PATHS 覆盖
   approval_store: true        # 审批记录是否持久化到 DB（false 则仅进程内存）
 
+# --- 技能（技能包 = SKILL.md + scripts/*.py，详见 docs/16-skills.md）---
+skills:
+  dir: null                   # 技能安装根目录；null -> <仓库根>/data/skills
+  enabled: []                 # 已安装技能的启用白名单（slug）；默认空 = 任何技能都不可见
+  timeout: null               # 单个技能脚本的执行超时秒数；null -> EXECUTION_TIMEOUT_SECONDS
+  max_output_bytes: 20000     # 脚本输出上限（超出截断，避免撑爆上下文）
+
 # --- 生命周期钩子（P0-3）---
 hooks: []                     # Hook 类的导入路径，例如 [projects.coding_agent.hooks.LoggingHooks]
 

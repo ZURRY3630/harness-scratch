@@ -241,4 +241,22 @@ AlertEvaluator(registry, thresholds=None).evaluate(now=None) -> list[Alert]
 `RuntimeEngine` 的观测注入点为可选参数 `tracer` / `metrics`，另有公开方法 `flush_trace()`。
 指标清单、阈值与启用方式见 [12-observability.md](12-observability.md)。
 
+**技能**（`mini_harness.skills`）
+
+```python
+SkillStore(root)              .list() / .get(slug) / .remove(slug) / .enabled(slugs) / .path_of(slug)
+SkillInstaller(store, limits=None)
+  .install_zip_bytes(data, *, source="upload", slug_hint="") -> SkillManifest
+  .install_zip_file(path) / .install_dir(dir) / .install_url(url, timeout=30) -> SkillManifest
+SkillRunner(timeout=..., max_output_bytes=...)
+  .run(manifest, script, params=None) -> SkillRunResult   # 不抛异常，失败编码进返回值
+  .build_argv(params) -> list[str]
+SkillRuntime(store, runner, enabled).index_block() / .read(slug) / .run(slug, script, params)
+SkillManifest  .slug / .name / .description / .version / .scripts / .env_vars / .required_env
+               .missing_env() / .missing_optional_env() / .to_dict(with_body=False)
+```
+
+技能工具（内置，需在 `tools.builtin` 中声明）：`list_skills` / `read_skill`（`full_trust`）、
+`run_skill_script`（`ask_first`）。环境变量注入规则与安全边界见 [16-skills.md](16-skills.md)。
+
 **评估**（`mini_harness.eval.runner`）：`TestCase` / `EvalResult` / `EvalRunner` 的字段与方法签名见 [13-evaluation.md](13-evaluation.md)。
