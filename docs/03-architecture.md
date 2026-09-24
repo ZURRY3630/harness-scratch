@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TB
-    subgraph D["领域层 · projects/&lt;name&gt; · 每个项目一套"]
+    subgraph D["领域层 · projects/<name> · 每个项目一套"]
         DC["config.yaml<br/>ProjectConfig"]
         DP["prompts/system.md<br/>角色提示词"]
         DT["tools/*.py<br/>@tool 函数"]
@@ -83,12 +83,12 @@ flowchart TB
 
 ## 4. 哪一层稳定，哪一层易变
 
-| 层 | 目录 | 变更频率 | 谁能改 | 稳定性承诺 |
-|---|---|---|---|---|
-| 内核 | `backend/mini_harness/` | 极低 | 框架维护者 | [contracts.md](contracts.md) 中的冻结接口不得破坏性变更 |
-| 扩展点实现 | `projects/<name>/tools`、`hooks.py`，以及外部实现的 Provider / Memory / Gate | 中 | 项目开发者 | 由项目自己维护；内核按契约调用，不关心实现细节 |
-| 领域配置与提示词 | `projects/<name>/config.yaml`、`prompts/` | 高 | 项目开发者 | 字段契约见 [06-configure.md](06-configure.md) |
-| 全局默认值 | `configs/default.yaml` | 低 | 框架维护者 | 字段只增不改语义 |
-| 运行时数据 | `data/*.db` | 持续 | 程序 | 表结构**不承诺**兼容，升级时允许重建 |
+| 层               | 目录                                                                             | 变更频率 | 谁能改     | 稳定性承诺                                             |
+| ---------------- | -------------------------------------------------------------------------------- | -------- | ---------- | ------------------------------------------------------ |
+| 内核             | `backend/mini_harness/`                                                        | 极低     | 框架维护者 | [contracts.md](contracts.md) 中的冻结接口不得破坏性变更 |
+| 扩展点实现       | `projects/<name>/tools`、`hooks.py`，以及外部实现的 Provider / Memory / Gate | 中       | 项目开发者 | 由项目自己维护；内核按契约调用，不关心实现细节         |
+| 领域配置与提示词 | `projects/<name>/config.yaml`、`prompts/`                                    | 高       | 项目开发者 | 字段契约见[06-configure.md](06-configure.md)            |
+| 全局默认值       | `configs/default.yaml`                                                         | 低       | 框架维护者 | 字段只增不改语义                                       |
+| 运行时数据       | `data/*.db`                                                                    | 持续     | 程序       | 表结构**不承诺**兼容，升级时允许重建             |
 
 判断一个改动该放哪里，只问一句：**"这句话里有没有业务名词？"** 有，就放领域层；没有，才考虑内核。

@@ -7,13 +7,13 @@
 
 ## 1. 场景与目标
 
-| 需求 | 落地方式 |
-|---|---|
-| 回答订单状态 | 工具 `lookup_order` |
-| 回答退换货政策 | 工具 `refund_policy` |
-| 创建售后工单 | 工具 `create_ticket`（有副作用 → 逐次审批） |
-| 记住用户偏好 | 启用内置工具 `memory_save` / `memory_search` |
-| 不让手机号、邮箱进入账本与模型上下文 | 钩子 `PIIMaskHooks.after_tool_execute` |
+| 需求                                 | 落地方式                                        |
+| ------------------------------------ | ----------------------------------------------- |
+| 回答订单状态                         | 工具`lookup_order`                            |
+| 回答退换货政策                       | 工具`refund_policy`                           |
+| 创建售后工单                         | 工具`create_ticket`（有副作用 → 逐次审批）   |
+| 记住用户偏好                         | 启用内置工具`memory_save` / `memory_search` |
+| 不让手机号、邮箱进入账本与模型上下文 | 钩子`PIIMaskHooks.after_tool_execute`         |
 
 ## 2. 最终目录结构
 
@@ -62,14 +62,14 @@ hooks:
 
 逐项说明：
 
-| 配置 | 作用 |
-|---|---|
-| `agent_name` | 注入提示词占位符 `{{AGENT_NAME}}`，同时作为界面标题显示 |
-| `language` | 注入 `{{LANGUAGE}}`，决定框架级提示词里的回答语言 |
-| `system_prompt_path` | 项目级提示词；相对本配置文件所在目录解析 |
-| `tools.builtin` | 只启用需要的内置工具；不列出来的不会被注册，模型也看不到 |
-| `tools.plugins_dir` | 本项目工具目录，启动时扫描其中所有 `@tool` 函数 |
-| `hooks` | 钩子类的导入路径，格式为 `模块路径.类名`；顺序即执行顺序 |
+| 配置                   | 作用                                                      |
+| ---------------------- | --------------------------------------------------------- |
+| `agent_name`         | 注入提示词占位符`{{AGENT_NAME}}`，同时作为界面标题显示  |
+| `language`           | 注入`{{LANGUAGE}}`，决定框架级提示词里的回答语言        |
+| `system_prompt_path` | 项目级提示词；相对本配置文件所在目录解析                  |
+| `tools.builtin`      | 只启用需要的内置工具；不列出来的不会被注册，模型也看不到  |
+| `tools.plugins_dir`  | 本项目工具目录，启动时扫描其中所有`@tool` 函数          |
+| `hooks`              | 钩子类的导入路径，格式为`模块路径.类名`；顺序即执行顺序 |
 
 未在这里声明的字段（模型、预算、路径边界等）自动继承 `configs/default.yaml` 与环境变量。
 
@@ -263,14 +263,14 @@ curl http://127.0.0.1:8765/api/tools
 
 `/api/tools` 应返回 6 个工具（顺序即下表）：
 
-| 工具 | 生效级别 | 来源 |
-|---|---|---|
-| `memory_save` | `ask_first` | 内置 |
-| `memory_search` | `full_trust` | 内置 |
-| `lookup_order` | `full_trust` | 本项目 |
+| 工具              | 生效级别       | 来源   |
+| ----------------- | -------------- | ------ |
+| `memory_save`   | `ask_first`  | 内置   |
+| `memory_search` | `full_trust` | 内置   |
+| `lookup_order`  | `full_trust` | 本项目 |
 | `refund_policy` | `full_trust` | 本项目 |
-| `create_ticket` | `ask_first` | 本项目 |
-| `list_tickets` | `full_trust` | 本项目 |
+| `create_ticket` | `ask_first`  | 本项目 |
+| `list_tickets`  | `full_trust` | 本项目 |
 
 工具改动后需要重启进程：装载发生在启动时，没有热重载。
 
@@ -369,13 +369,13 @@ curl http://127.0.0.1:8765/api/tools
 
 ## 12. 接下来可以改什么
 
-| 想做的事 | 去哪一篇 |
-|---|---|
-| 调预算、轮次上限、可写目录 | [06-configure.md](06-configure.md) |
-| 换成真实接口、加更多工具 | [07-custom-tools.md](07-custom-tools.md) |
-| 换成公司自研模型 | [08-custom-provider.md](08-custom-provider.md) |
-| 加敏感词拦截、加审计埋点 | [10-custom-hooks.md](10-custom-hooks.md) |
-| 让高危工具默认转人工 | [11-custom-gate.md](11-custom-gate.md) |
-| 为这个项目建回归用例 | [13-evaluation.md](13-evaluation.md) |
+| 想做的事                   | 去哪一篇                                      |
+| -------------------------- | --------------------------------------------- |
+| 调预算、轮次上限、可写目录 | [06-configure.md](06-configure.md)             |
+| 换成真实接口、加更多工具   | [07-custom-tools.md](07-custom-tools.md)       |
+| 换成公司自研模型           | [08-custom-provider.md](08-custom-provider.md) |
+| 加敏感词拦截、加审计埋点   | [10-custom-hooks.md](10-custom-hooks.md)       |
+| 让高危工具默认转人工       | [11-custom-gate.md](11-custom-gate.md)         |
+| 为这个项目建回归用例       | [13-evaluation.md](13-evaluation.md)           |
 
 全部扩展点索引见 [04-extension-points.md](04-extension-points.md)。
