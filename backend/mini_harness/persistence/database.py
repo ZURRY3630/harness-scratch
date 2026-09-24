@@ -72,6 +72,12 @@ CREATE TABLE IF NOT EXISTS tool_permissions (
     permission  TEXT NOT NULL,
     updated_at  REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS skill_states (
+    slug        TEXT PRIMARY KEY,
+    enabled     INTEGER NOT NULL,
+    updated_at  REAL NOT NULL
+);
 """
 
 
@@ -224,3 +230,24 @@ class Database:
 
     def list_tool_permissions(self) -> dict[str, str]:
         return {r["tool_name"]: r["permission"] for r in self.query_all("SELECT tool_name, permission FROM tool_permissions")}
+
+    # ----- skill states（技能启用的运行时覆盖；未覆盖时用 config.yaml 的 skills.enabled）-----
+    def set_skill_state(self, slug: str, enabled: bool) -> None:
+        self.execute(
+            "INSERT OR REPLACE INTO skill_states(slug,enabled,updated_at) VALUES(?,?,?)",
+            (slug, 1 if enabled else 0, time.time()),
+        )
+
+    def get_skill_state(self, slug: str) -> Optional[bool]:
+        row = self.query_one("SELECT enabled FROM skill_states WHERE slug=?", (slug,))
+        return bool(row["enabled"]) if row else None
+
+    def list_skill_states(self) -> dict[str, bool]:
+        return {r["slug"]: bool(r["enabled"]) for r in self.query_all("SELECT slug, enabled FROM skill_states")}
+
+    def clear_skill_state(self, slug: str) -> bool:
+        """清除覆盖；没有覆盖时返回 False。"""
+        if self.get_skill_state(slug) is None:
+            return False
+        self.execute("DELETE FROM skill_states WHERE slug=?", (slug,))
+        return True

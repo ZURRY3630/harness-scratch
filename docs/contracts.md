@@ -248,15 +248,19 @@ SkillStore(root)              .list() / .get(slug) / .remove(slug) / .enabled(sl
 SkillInstaller(store, limits=None)
   .install_zip_bytes(data, *, source="upload", slug_hint="") -> SkillManifest
   .install_zip_file(path) / .install_dir(dir) / .install_url(url, timeout=30) -> SkillManifest
+  .install_files(files: dict[str, str], *, source="create", slug_hint="") -> SkillManifest
 SkillRunner(timeout=..., max_output_bytes=...)
   .run(manifest, script, params=None) -> SkillRunResult   # 不抛异常，失败编码进返回值
   .build_argv(params) -> list[str]
-SkillRuntime(store, runner, enabled).index_block() / .read(slug) / .run(slug, script, params)
+SkillRuntime(store, runner, enabled, config_enabled, overrides)
+  .enabled_manifests() / .enabled_source(slug) / .index_block() / .read(slug) / .run(slug, script, params)
 SkillManifest  .slug / .name / .description / .version / .scripts / .env_vars / .required_env
                .missing_env() / .missing_optional_env() / .to_dict(with_body=False)
 ```
 
 技能工具（内置，需在 `tools.builtin` 中声明）：`list_skills` / `read_skill`（`full_trust`）、
-`run_skill_script`（`ask_first`）。环境变量注入规则与安全边界见 [16-skills.md](16-skills.md)。
+`run_skill_script`（`ask_first`）。启停的最终状态 = 运行时覆盖（`skill_states` 表，界面/API 写入）优先于
+`skills.enabled` 配置；`GET /api/skills` 同时返回 `enabled`、`enabled_source`、`config_enabled`。
+环境变量注入规则与安全边界见 [16-skills.md](16-skills.md)。
 
 **评估**（`mini_harness.eval.runner`）：`TestCase` / `EvalResult` / `EvalRunner` 的字段与方法签名见 [13-evaluation.md](13-evaluation.md)。

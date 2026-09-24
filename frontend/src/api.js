@@ -36,6 +36,39 @@ export const api = {
   clearToolPermission: (name) =>
     fetch(`/api/tools/${encodeURIComponent(name)}/permission`, { method: 'DELETE' }).then(jsonOrThrow),
 
+  // ---- 技能管理 ----
+  listSkills: () => fetch('/api/skills').then(jsonOrThrow),
+  getSkill: (slug) => fetch(`/api/skills/${encodeURIComponent(slug)}`).then(jsonOrThrow),
+  // 上传 zip：请求体直接是文件本身（后端按 zip 字节解析，无需 multipart）
+  installSkillZip: (file) =>
+    fetch('/api/skills/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/zip' },
+      body: file,
+    }).then(jsonOrThrow),
+  installSkillUrl: (url) =>
+    fetch('/api/skills/install-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    }).then(jsonOrThrow),
+  createSkill: (payload) =>
+    fetch('/api/skills/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(jsonOrThrow),
+  setSkillEnabled: (slug, enabled) =>
+    fetch(`/api/skills/${encodeURIComponent(slug)}/enabled`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    }).then(jsonOrThrow),
+  clearSkillEnabled: (slug) =>
+    fetch(`/api/skills/${encodeURIComponent(slug)}/enabled`, { method: 'DELETE' }).then(jsonOrThrow),
+  deleteSkill: (slug) =>
+    fetch(`/api/skills/${encodeURIComponent(slug)}`, { method: 'DELETE' }).then(jsonOrThrow),
+
   // ---- SSE 流（聊天 / 审批续跑）。onEvent 返回 true 表示流正常结束 ----
   async *stream(path, body) {
     const resp = await fetch('/api' + path, {

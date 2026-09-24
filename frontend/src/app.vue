@@ -3,6 +3,7 @@ import { ref, reactive, computed, nextTick, onMounted } from 'vue'
 import SessionList from './components/SessionList.vue'
 import MemoryPanel from './components/MemoryPanel.vue'
 import ToolPanel from './components/ToolPanel.vue'
+import SkillPanel from './components/SkillPanel.vue'
 import StatsPanel from './components/StatsPanel.vue'
 import MessageFeed from './components/MessageFeed.vue'
 import ApprovalCard from './components/ApprovalCard.vue'
@@ -182,6 +183,7 @@ onMounted(async () => {
       <button :class="{ on: tab === 'sessions' }" @click="tab = 'sessions'">会话</button>
       <button :class="{ on: tab === 'memories' }" @click="openMemories">记忆</button>
       <button :class="{ on: tab === 'tools' }" @click="tab = 'tools'">工具</button>
+      <button :class="{ on: tab === 'skills' }" @click="tab = 'skills'">技能</button>
     </div>
     <SessionList
       v-show="tab === 'sessions'"
@@ -192,6 +194,7 @@ onMounted(async () => {
     />
     <MemoryPanel v-if="tab === 'memories'" />
     <ToolPanel v-if="tab === 'tools'" />
+    <SkillPanel v-if="tab === 'skills'" />
     <StatsPanel :usage="usage" />
   </aside>
 

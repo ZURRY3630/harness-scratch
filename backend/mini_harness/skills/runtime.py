@@ -18,15 +18,23 @@ from .store import SkillStore
 
 @dataclass
 class SkillRuntime:
-    """已安装技能的对外视图（受项目白名单过滤）。"""
+    """已安装技能的对外视图（受项目白名单 + 运行时覆盖过滤）。"""
 
     store: SkillStore
     runner: SkillRunner
-    enabled: list[str] = field(default_factory=list)
+    enabled: list[str] = field(default_factory=list)          # 最终生效的 slug
+    config_enabled: list[str] = field(default_factory=list)   # config.yaml 里的白名单
+    overrides: dict[str, bool] = field(default_factory=dict)  # 界面上的运行时覆盖
 
     # ----- 查询 -----
     def enabled_manifests(self) -> list[SkillManifest]:
         return self.store.enabled(self.enabled)
+
+    def enabled_source(self, slug: str) -> str:
+        """启用状态来自哪里：`override`（界面覆盖）/ `config`（配置文件）/ 空（未启用）。"""
+        if slug in self.overrides:
+            return "override" if self.overrides[slug] else ""
+        return "config" if slug in self.config_enabled else ""
 
     def get(self, slug: str) -> Optional[SkillManifest]:
         """取已启用的技能；未启用/不存在一律返回 None（对外表现为"没有这个技能"）。"""
@@ -90,11 +98,24 @@ def build_skill_runtime(
     *,
     timeout: float,
     max_output_bytes: int = 20_000,
+    overrides: Optional[dict[str, bool]] = None,
 ) -> SkillRuntime:
-    """组装技能运行时（安装根目录不存在时也能安全构造，列表为空）。"""
+    """组装技能运行时。
+
+    Args:
+        directory: 安装根目录（不存在时也能安全构造，列表为空）
+        enabled: `config.yaml` 的 `skills.enabled` 白名单
+        overrides: 运行时覆盖（来自界面/API，持久化在 SQLite），优先级高于配置
+    """
     store = SkillStore(Path(directory))
     runner = SkillRunner(timeout=timeout, max_output_bytes=max_output_bytes)
-    return SkillRuntime(store=store, runner=runner, enabled=list(enabled))
+    config_enabled = list(enabled)
+    resolved = dict(overrides or {})
+
+    effective = [s for s in config_enabled if resolved.get(s, True)]
+    effective += [s for s, on in resolved.items() if on and s not in effective]
+    return SkillRuntime(store=store, runner=runner, enabled=effective,
+                        config_enabled=config_enabled, overrides=resolved)
 
 
 __all__ = ["SkillRuntime", "build_skill_runtime", "SkillError"]

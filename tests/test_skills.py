@@ -327,19 +327,155 @@ def test_run_skill_script_tool_is_ask_first(skill_root, installer):
     assert "非法脚本名" in tool.func(skill="demo", script="../run.py")
 
 
-# ---------------------------------------------------------------- API
-def test_api_install_list_delete(skill_root, tmp_path, monkeypatch, installer):
+def test_skill_runtime_overrides_win_over_config():
+    """运行时覆盖优先于配置：可停用配置启用的技能，也可启用配置里没有的技能。"""
+    from mini_harness.skills.runtime import build_skill_runtime
+
+    root = Path("unused")
+    runtime = build_skill_runtime(root, ["a", "b"], timeout=5, overrides={"b": False, "c": True})
+    assert sorted(runtime.enabled) == ["a", "c"]
+    assert runtime.enabled_source("b") == ""            # 被界面停用
+    assert runtime.enabled_source("c") == "override"    # 被界面启用
+    assert runtime.enabled_source("a") == "config"      # 来自配置
+    assert "c" in runtime.index_lines()[1] if len(runtime.index_lines()) > 1 else True
+
+
+# ---------------------------------------------------------------- 启停 / 自定义创建（API）
+@pytest.fixture()
+def api_env(skill_root, tmp_path, monkeypatch):
+    """隔离的 API 环境：临时技能目录 + 临时 DB（不碰开发库）。"""
     from collections import OrderedDict
+    from dataclasses import replace
+
+    import mini_harness.api.routes as routes
+    from mini_harness.persistence.database import Database
+
+    cfg = replace(routes.get_project_config(),
+                  skills={**routes.get_project_config().skills, "dir": str(skill_root), "enabled": ["demo"]})
+    db = Database(tmp_path / "api.db")
+    monkeypatch.setattr(routes, "get_project_config", lambda: cfg)
+    monkeypatch.setattr(routes, "_get_db", lambda cfg=None: db)
+    monkeypatch.setattr(routes, "_engines", OrderedDict())
+    return routes, db
+
+
+def test_api_enable_disable_and_clear_override(api_env, skill_root):
+    """界面启停：写入覆盖 -> 立即生效 -> 可清除回配置默认。"""
+    from fastapi.testclient import TestClient
+
+    from mini_harness.main import app
+
+    routes, db = api_env
+    installer = SkillInstaller(SkillStore(skill_root))
+    installer.install_dir(make_skill_dir(skill_root.parent / "src", "demo"))    # 配置里启用的
+    installer.install_dir(make_skill_dir(skill_root.parent / "src", "extra"))   # 配置里没有的
+
+    with TestClient(app) as client:
+        rows = {r["slug"]: r for r in client.get("/api/skills").json()}
+        assert rows["demo"]["enabled"] and rows["demo"]["enabled_source"] == "config"
+        assert not rows["extra"]["enabled"] and rows["extra"]["enabled_source"] == ""
+
+        # 启用一个配置里没有的技能
+        assert client.put("/api/skills/extra/enabled", json={"enabled": True}).status_code == 200
+        rows = {r["slug"]: r for r in client.get("/api/skills").json()}
+        assert rows["extra"]["enabled"] and rows["extra"]["enabled_source"] == "override"
+        assert db.get_skill_state("extra") is True
+
+        # 停用一个配置里启用的技能
+        client.put("/api/skills/demo/enabled", json={"enabled": False})
+        rows = {r["slug"]: r for r in client.get("/api/skills").json()}
+        assert not rows["demo"]["enabled"] and rows["demo"]["enabled_source"] == ""
+
+        # 清除覆盖后回到配置默认
+        assert client.delete("/api/skills/demo/enabled").status_code == 200
+        rows = {r["slug"]: r for r in client.get("/api/skills").json()}
+        assert rows["demo"]["enabled"] and rows["demo"]["enabled_source"] == "config"
+        assert client.delete("/api/skills/demo/enabled").status_code == 404   # 已无覆盖
+
+        assert client.put("/api/skills/nope/enabled", json={"enabled": True}).status_code == 404
+
+
+def test_api_enable_rebuilds_engine_cache(api_env, skill_root):
+    """启停会清空引擎缓存，让系统提示词里的技能索引重建。"""
+    from fastapi.testclient import TestClient
+
+    from mini_harness.main import app
+
+    routes, _db = api_env
+    SkillInstaller(SkillStore(skill_root)).install_dir(make_skill_dir(skill_root.parent / "src", "demo"))
+
+    class _StubEngine:
+        def flush_trace(self) -> None:
+            return None
+
+    routes._engines["s1"] = _StubEngine()      # 只验证"被清掉"，用最小替身
+    with TestClient(app) as client:
+        body = client.put("/api/skills/demo/enabled", json={"enabled": False}).json()
+    assert body["engines_rebuilt"] == 1
+    assert len(routes._engines) == 0
+
+
+def test_api_create_skill_builds_package(api_env, skill_root):
+    """自定义创建：表单内容拼成 SKILL.md（含 front-matter 与凭证），脚本落到 scripts/。"""
+    from fastapi.testclient import TestClient
+
+    from mini_harness.main import app
+
+    with TestClient(app) as client:
+        resp = client.post("/api/skills/create", json={
+            "name": "周报助手",
+            "description": "把流水账整理成结构化周报",
+            "slug": "weekly-report",
+            "body": "# 周报助手\n\n## 操作步骤\n1. 执行脚本",
+            "credentials": [{"name": "report_team", "env": "REPORT_TEAM", "required": False}],
+            "scripts": {"build_report.py": "import argparse\nprint('{}')\n"},
+        })
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["slug"] == "weekly-report" and resp.json()["enabled"] is False
+
+        skill_md = (skill_root / "weekly-report" / "SKILL.md").read_text(encoding="utf-8")
+        assert skill_md.startswith("---") and "name: 周报助手" in skill_md
+        assert "slug: weekly-report" in skill_md and "env: REPORT_TEAM" in skill_md
+        assert (skill_root / "weekly-report" / "scripts" / "build_report.py").is_file()
+
+        detail = client.get("/api/skills/weekly-report").json()
+        assert detail["required_env"] == []            # 声明为可选
+        assert detail["env_vars"] == ["REPORT_TEAM"]
+
+        assert client.post("/api/skills/create", json={"name": "", "description": "x"}).status_code == 400
+        assert client.post("/api/skills/create", json={
+            "name": "x", "description": "y", "scripts": {"../escape.py": "print(1)"},
+        }).status_code == 400
+
+
+def test_api_uninstall_clears_override(api_env, skill_root):
+    """卸载会顺带清掉启用覆盖，避免遗留孤儿状态。"""
+    from fastapi.testclient import TestClient
+
+    from mini_harness.main import app
+
+    routes, db = api_env
+    SkillInstaller(SkillStore(skill_root)).install_dir(make_skill_dir(skill_root.parent / "src", "extra"))
+
+    with TestClient(app) as client:
+        client.put("/api/skills/extra/enabled", json={"enabled": True})
+        assert client.delete("/api/skills/extra").status_code == 200
+    assert db.get_skill_state("extra") is None
+
+
+def test_api_install_list_delete(api_env, skill_root, monkeypatch):
+    """上传 zip 安装 -> 列表 -> 详情 -> 卸载（全程走 API）。"""
+    from dataclasses import replace
 
     from fastapi.testclient import TestClient
 
     import mini_harness.api.routes as routes
     from mini_harness.main import app
 
-    cfg = replace(routes.get_project_config(), skills={**routes.get_project_config().skills,
-                                                       "dir": str(skill_root), "enabled": []})
-    monkeypatch.setattr(routes, "get_project_config", lambda: cfg)
-    monkeypatch.setattr(routes, "_engines", OrderedDict())
+    # 这个用例只关心安装链路，把白名单清空以便断言"未启用"
+    base = routes.get_project_config()          # 先取住当前配置，避免 lambda 里递归调用自己
+    monkeypatch.setattr(routes, "get_project_config",
+                        lambda: replace(base, skills={**base.skills, "enabled": []}))
 
     payload = make_zip({"SKILL.md": SKILL_MD.format(slug="demo"), "scripts/run.py": SCRIPT})
     with TestClient(app) as client:

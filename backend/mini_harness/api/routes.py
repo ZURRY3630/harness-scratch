@@ -35,7 +35,7 @@ from ..observability.spans import SpanSink
 from ..observability.trace import JsonlTraceWriter, TraceWriter
 from ..runtime.engine import RuntimeEngine
 from ..skills.installer import SkillInstaller
-from ..skills.manifest import SkillError
+from ..skills.manifest import SkillError, compose_skill_md
 from ..skills.runtime import SkillRuntime, build_skill_runtime
 from ..skills.store import SkillStore
 from ..tools.levels import PermissionLevel
@@ -129,12 +129,13 @@ def _build_tracer(trace_writer: TraceWriter | None) -> Tracer:
 
 
 def _build_skill_runtime(cfg: ProjectConfig) -> SkillRuntime:
-    """技能运行时：安装根目录 + 项目启用白名单 + 执行器。"""
+    """技能运行时：安装根目录 + 项目白名单 + 界面上的运行时覆盖。"""
     return build_skill_runtime(
         cfg.skills["dir"],
         list(cfg.skills["enabled"]),
         timeout=float(cfg.skills["timeout"]),
         max_output_bytes=int(cfg.skills["max_output_bytes"]),
+        overrides=_get_db(cfg).list_skill_states(),
     )
 
 
@@ -204,6 +205,20 @@ def _flush_engine(engine: RuntimeEngine | None) -> None:
 def _evict_engine(engine: RuntimeEngine | None) -> None:
     """淘汰一个引擎：先刷盘，再交给 GC。"""
     _flush_engine(engine)
+
+
+def _invalidate_engines(reason: str) -> int:
+    """技能集合或启用状态变化后清空引擎缓存。
+
+    系统提示词里的技能索引是组装时拼进去的，缓存里的旧引擎会一直带着旧索引，
+    因此这里整体失效，下一个请求按新状态重建。
+    """
+    count = len(_engines)
+    while _engines:
+        _evict_engine(_engines.popitem(last=False)[1])
+    if count:
+        log.info("引擎缓存已失效", reason=reason, count=count)
+    return count
 
 
 def flush_observability() -> None:
@@ -436,29 +451,55 @@ async def traces(session_id: Optional[str] = None, limit: int = 50):
     return {"spans": SPANS.recent(limit=max(1, min(limit, 500)), session_id=session_id or "")}
 
 
-# ---------- 技能（安装 / 列表 / 卸载）----------
+# ---------- 技能（安装 / 自定义创建 / 启停 / 卸载）----------
 class SkillInstallUrlRequest(BaseModel):
     url: str
+
+
+class SkillStateRequest(BaseModel):
+    enabled: bool
+
+
+class SkillCreateRequest(BaseModel):
+    """界面"自定义创建"：表单内容拼成 SKILL.md（可选附带脚本）。"""
+
+    name: str
+    description: str
+    slug: str = ""
+    body: str = ""
+    credentials: list[dict] = Field(default_factory=list)
+    scripts: dict[str, str] = Field(default_factory=dict)
 
 
 def _skill_store() -> SkillStore:
     return SkillStore(Path(get_project_config().skills["dir"]))
 
 
+def _skill_view(manifest, skills: SkillRuntime) -> dict:
+    """单个技能的对外视图：安装信息 + 生效状态（含状态来源）。"""
+    return {
+        **manifest.to_dict(),
+        "enabled": manifest.slug in skills.enabled,
+        "enabled_source": skills.enabled_source(manifest.slug),
+        "config_enabled": manifest.slug in skills.config_enabled,
+    }
+
+
 @router.get("/skills")
 async def list_skills():
-    """已安装技能清单（含是否在当前项目启用、缺哪些凭证、脚本列表）。"""
-    enabled = set(get_project_config().skills["enabled"])
-    return [{**m.to_dict(), "enabled": m.slug in enabled} for m in _skill_store().list()]
+    """已安装技能清单（含是否生效、状态来源、缺哪些凭证、脚本列表）。"""
+    skills = _build_skill_runtime(get_project_config())
+    return [_skill_view(m, skills) for m in skills.store.list()]
 
 
 @router.get("/skills/{slug}")
 async def get_skill(slug: str):
     """单个技能详情（含 SKILL.md 正文）。"""
-    manifest = _skill_store().get(slug)
+    skills = _build_skill_runtime(get_project_config())
+    manifest = skills.store.get(slug)
     if manifest is None:
         raise HTTPException(404, f"技能不存在: {slug}")
-    return {**manifest.to_dict(with_body=True), "enabled": slug in get_project_config().skills["enabled"]}
+    return {**_skill_view(manifest, skills), "body": manifest.body}
 
 
 @router.post("/skills/install")
@@ -471,6 +512,7 @@ async def install_skill(request: Request):
         manifest = SkillInstaller(_skill_store()).install_zip_bytes(data, source="upload")
     except SkillError as e:
         raise HTTPException(400, f"技能包不合法: {e}")
+    _invalidate_engines("技能安装")
     return {"installed": True, **manifest.to_dict()}
 
 
@@ -481,18 +523,66 @@ async def install_skill_from_url(req: SkillInstallUrlRequest):
         manifest = SkillInstaller(_skill_store()).install_url(req.url)
     except SkillError as e:
         raise HTTPException(400, f"安装失败: {e}")
+    _invalidate_engines("技能安装")
     return {"installed": True, **manifest.to_dict()}
+
+
+@router.post("/skills/create")
+async def create_skill(req: SkillCreateRequest):
+    """自定义创建技能：把表单内容拼成技能包并安装。"""
+    name, description = req.name.strip(), req.description.strip()
+    if not name or not description:
+        raise HTTPException(400, "name 与 description 必填")
+
+    files = {"SKILL.md": compose_skill_md(
+        name=name, description=description, slug=req.slug.strip(),
+        credentials=req.credentials or None, body=req.body,
+    )}
+    for filename, source in (req.scripts or {}).items():
+        pure = Path(filename).name
+        if pure != filename or not pure.endswith(".py"):
+            raise HTTPException(400, f"脚本名只能是 scripts 下的 .py 文件名: {filename}")
+        files[f"scripts/{pure}"] = source
+
+    try:
+        manifest = SkillInstaller(_skill_store()).install_files(files, source="create", slug_hint=req.slug.strip())
+    except SkillError as e:
+        raise HTTPException(400, f"创建失败: {e}")
+    _invalidate_engines("技能创建")
+    return {"installed": True, **manifest.to_dict(), "enabled": False}
+
+
+@router.put("/skills/{slug}/enabled")
+async def set_skill_enabled(slug: str, req: SkillStateRequest):
+    """启用/停用技能：持久化覆盖，并重建引擎缓存使其立即生效。"""
+    if _skill_store().get(slug) is None:
+        raise HTTPException(404, f"技能不存在: {slug}")
+    _get_db().set_skill_state(slug, req.enabled)
+    rebuilt = _invalidate_engines("技能启用状态变更")
+    log.info("技能启用状态已更新", skill=slug, enabled=req.enabled)
+    return {"skill": slug, "enabled": req.enabled, "engines_rebuilt": rebuilt}
+
+
+@router.delete("/skills/{slug}/enabled")
+async def clear_skill_enabled(slug: str):
+    """清除启用覆盖，回到 config.yaml 的 `skills.enabled`。"""
+    if not _get_db().clear_skill_state(slug):
+        raise HTTPException(404, f"技能 '{slug}' 无运行时覆盖")
+    rebuilt = _invalidate_engines("技能启用覆盖已清除")
+    return {"skill": slug, "cleared": True, "engines_rebuilt": rebuilt}
 
 
 @router.delete("/skills/{slug}")
 async def uninstall_skill(slug: str):
-    """卸载技能（整目录删除）。"""
+    """卸载技能（整目录删除，并清掉它的启用覆盖）。"""
     try:
         removed = _skill_store().remove(slug)
     except SkillError as e:
         raise HTTPException(400, str(e))
     if not removed:
         raise HTTPException(404, f"技能不存在: {slug}")
+    _get_db().clear_skill_state(slug)
+    _invalidate_engines("技能卸载")
     return {"deleted": slug}
 
 

@@ -92,6 +92,7 @@ projects/coding_agent/
 | 要改什么 | 改哪里 |
 |---|---|
 | 聊天/审批/流式逻辑 | `frontend/src/App.vue` 的 `runStream` 事件状态机 |
+| 技能页签（上传/新建/启停） | `frontend/src/components/SkillPanel.vue` |
 | 消息气泡/工具卡片样式 | `frontend/src/components/MessageFeed.vue` |
 | 审批卡片文案与按钮 | `frontend/src/components/ApprovalCard.vue` |
 | 配色/设计变量 | `frontend/src/styles/main.css` 的 `:root` |
@@ -129,9 +130,12 @@ projects/coding_agent/
 - `DELETE /api/tools/{name}/permission` — 清除覆盖，回到声明默认
 - `GET /api/metrics` — 指标快照（counters / histograms / gauges）+ 当前告警（拉取式，5 分钟去重）
 - `GET /api/traces?session_id=&limit=` — 最近调用链 span（进程内环形缓冲，倒序）
-- `GET /api/skills`、`GET /api/skills/{slug}` — 已安装技能清单 / 详情（含 SKILL.md 正文）
+- `GET /api/skills`、`GET /api/skills/{slug}` — 已安装技能清单 / 详情（含 SKILL.md 正文与生效状态）
 - `POST /api/skills/install` — 上传 zip 技能包（请求体即 zip 字节）
 - `POST /api/skills/install-url` `{url}` — 从 http(s) 直链安装技能
+- `POST /api/skills/create` — 自定义创建技能（表单内容拼成 SKILL.md + 可选脚本）
+- `PUT /api/skills/{slug}/enabled` `{enabled}` — 启用/停用（持久化覆盖，立即生效）
+- `DELETE /api/skills/{slug}/enabled` — 清除启用覆盖，回到 `config.yaml` 的 `skills.enabled`
 - `DELETE /api/skills/{slug}` — 卸载技能
 - `GET /api/health` — 健康检查 + 当前项目 `agent_name`
 

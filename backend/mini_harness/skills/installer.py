@@ -20,7 +20,7 @@ import uuid
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Optional
+from typing import Mapping, Optional
 from urllib.parse import urlsplit
 
 from ..observability.logging import get_logger
@@ -60,6 +60,32 @@ class SkillInstaller:
         staging = self._new_staging()
         try:
             self._extract_zip(data, staging)
+            return self._finalize(staging, source=source, slug_hint=slug_hint)
+        except Exception:
+            shutil.rmtree(staging, ignore_errors=True)
+            raise
+
+    def install_files(self, files: Mapping[str, str], *, source: str = "create", slug_hint: str = "") -> SkillManifest:
+        """从内存中的文件内容安装（界面"自定义创建"用；键是包内相对路径）。"""
+        if not files:
+            raise SkillError("技能内容为空")
+        staging = self._new_staging()
+        try:
+            total = 0
+            for name, content in files.items():
+                rel = _safe_relative(name)
+                suffix = PurePosixPath(rel).suffix.lower()
+                if suffix not in _ALLOWED_SUFFIXES:
+                    raise SkillError(f"不允许的文件类型 {suffix or '(无后缀)'}: {name}")
+                size = len(content.encode("utf-8"))
+                if size > self.limits.max_file_bytes:
+                    raise SkillError(f"单文件超过上限 {self.limits.max_file_bytes} 字节: {name}")
+                total += size
+                if total > self.limits.max_total_bytes:
+                    raise SkillError(f"技能总体积超过上限 {self.limits.max_total_bytes} 字节")
+                target = staging / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
             return self._finalize(staging, source=source, slug_hint=slug_hint)
         except Exception:
             shutil.rmtree(staging, ignore_errors=True)
@@ -183,18 +209,23 @@ class SkillInstaller:
 
     def _check_entry(self, info: zipfile.ZipInfo) -> None:
         """单条 zip 条目的安全校验（路径穿越 / 符号链接 / 体积 / 后缀）。"""
-        name = info.filename.replace("\\", "/")
-        parts = [p for p in name.split("/") if p]
-
         if info.is_dir():
             return
-        if not parts or name.startswith("/") or ":" in parts[0] or ".." in parts:
-            raise SkillError(f"zip 内存在越界路径: {info.filename}")
+        _safe_relative(info.filename)
         if (info.external_attr >> 16) & 0o170000 == 0o120000:      # S_IFLNK
             raise SkillError(f"zip 内含符号链接，已拒绝: {info.filename}")
         if info.file_size > self.limits.max_file_bytes:
             raise SkillError(f"单文件超过上限 {self.limits.max_file_bytes} 字节: {info.filename}")
 
-        suffix = PurePosixPath(name).suffix.lower()
+        suffix = PurePosixPath(info.filename.replace("\\", "/")).suffix.lower()
         if suffix not in _ALLOWED_SUFFIXES:
             raise SkillError(f"不允许的文件类型 {suffix or '(无后缀)'}: {info.filename}")
+
+
+def _safe_relative(name: str) -> str:
+    """校验并规范化包内相对路径；任何越界（绝对路径 / .. / 盘符）都拒绝。"""
+    cleaned = (name or "").replace("\\", "/")
+    parts = [p for p in cleaned.split("/") if p]
+    if not parts or cleaned.startswith("/") or ":" in parts[0] or ".." in parts:
+        raise SkillError(f"存在越界路径: {name}")
+    return "/".join(parts)

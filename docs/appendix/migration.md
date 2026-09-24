@@ -24,13 +24,21 @@
 - 内置工具 `list_skills` / `read_skill` / `run_skill_script`（`tools/builtin/skills.py`）
 - 配置段 `skills.{dir,enabled,timeout,max_output_bytes}`
 - HTTP：`GET /api/skills`、`GET /api/skills/{slug}`、`POST /api/skills/install`、
-  `POST /api/skills/install-url`、`DELETE /api/skills/{slug}`
+  `POST /api/skills/install-url`、`POST /api/skills/create`（表单创建）、
+  `PUT /api/skills/{slug}/enabled`、`DELETE /api/skills/{slug}/enabled`、`DELETE /api/skills/{slug}`
+- 持久化：`skill_states` 表（技能启用的运行时覆盖；未覆盖时回落到 `skills.enabled`）
+- `SkillRuntime` 新增 `config_enabled` / `overrides` 字段与 `enabled_source(slug)`；
+  `build_skill_runtime(..., overrides=)`；`SkillInstaller.install_files()`；`manifest.compose_skill_md()`
+- 前端侧边栏新增「技能」页签（`frontend/src/components/SkillPanel.vue`）：列表 / 上传 zip / URL 安装 / 表单新建 / 启停 / 卸载
 - `examples/skills/hello-world/`：技能包格式参考实现
 
 ### 行为变化
 
-- 项目启用技能后，**系统提示词尾部会追加技能索引段**（几行，随 `skills.enabled` 变化；
-  因此改启用列表需要重建引擎/重启进程）。
+- 项目启用技能后，**系统提示词尾部会追加技能索引段**（几行，随生效技能集合变化）。
+  因此改 `skills.enabled` 需要重启进程；而界面/API 启停会**清空引擎缓存**，下个请求即用新索引（无需重启）。
+- `GET /api/skills` 的 `enabled` 现在是**最终生效值**（含运行时覆盖），并新增 `enabled_source`
+  （`config` / `override` / 空）与 `config_enabled` 两个字段。
+- 卸载技能会一并清除它的启用覆盖，避免遗留孤儿状态。
 - 技能脚本在**受限环境**中执行：不继承宿主环境变量、只注入声明/探测到的凭证；
   宿主模型密钥（`LLM_API_KEY` 等）永不注入，技能要求它们会被直接拒绝。
 - 技能执行超时复用 `EXECUTION_TIMEOUT_SECONDS`（可用 `skills.timeout` 覆盖）。

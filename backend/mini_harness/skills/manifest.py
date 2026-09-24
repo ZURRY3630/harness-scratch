@@ -114,6 +114,28 @@ class SkillManifest:
         return data
 
 
+def compose_skill_md(
+    *,
+    name: str,
+    description: str,
+    slug: str = "",
+    version: str = "",
+    credentials: Optional[list[dict[str, Any]]] = None,
+    body: str = "",
+) -> str:
+    """按 front-matter 约定拼一份 SKILL.md（供界面"自定义创建"使用）。"""
+    meta: dict[str, Any] = {"name": name, "description": description}
+    if slug:
+        meta["slug"] = slug
+    if version:
+        meta["version"] = version
+    if credentials:
+        meta["credentials"] = credentials
+    front = yaml.safe_dump(meta, allow_unicode=True, sort_keys=False).strip()
+    content = body.strip() or f"# {name}\n\n{description}\n"
+    return f"---\n{front}\n---\n\n{content}\n"
+
+
 def parse_skill_md(text: str) -> tuple[dict[str, Any], str]:
     """拆出 front-matter（字典）与正文。缺 front-matter 直接报错。"""
     match = _FRONT_MATTER_RE.match(text.lstrip("\ufeff"))
